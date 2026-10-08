@@ -21,6 +21,17 @@ def test_migrate_and_stats(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, caps
         get_settings.cache_clear()
 
 
-def test_unimplemented_command_returns_2(capsys) -> None:
-    assert cli.main(["sync"]) == 2
-    assert "Faz 3" in capsys.readouterr().err
+def test_sync_and_reindex(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys) -> None:
+    from tests.pdfgen import write_sample_contracts
+
+    write_sample_contracts(tmp_path / "contracts")
+    monkeypatch.setenv("DATA_DIR", str(tmp_path / "data"))
+    monkeypatch.setenv("LOCAL_CONTRACTS_DIR", str(tmp_path / "contracts"))
+    get_settings.cache_clear()
+    try:
+        assert cli.main(["sync"]) == 0
+        assert "Yeni: 2" in capsys.readouterr().out
+        assert cli.main(["reindex"]) == 0
+        assert "3 dosya" in capsys.readouterr().out
+    finally:
+        get_settings.cache_clear()

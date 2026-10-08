@@ -11,9 +11,7 @@ from app.llm.schemas import CITY_PROBE, CityProbe
 from tests import fakes
 from tests.conftest import make_settings
 
-UNSUPPORTED_SCHEMA = (
-    "Invalid parameter: 'text.format' of type 'json_schema' is not supported with this model."
-)
+UNSUPPORTED_SCHEMA = "Invalid parameter: 'text.format' of type 'json_schema' is not supported with this model."
 UNSUPPORTED_STREAM = "The 'stream' parameter is not supported for this deployment."
 
 
@@ -21,9 +19,7 @@ def run(coro):
     return asyncio.run(coro)
 
 
-def make_client(
-    tmp_path: Path, api: fakes.FakeResponses, recorded: list | None = None, **overrides
-) -> LLMClient:
+def make_client(tmp_path: Path, api: fakes.FakeResponses, recorded: list | None = None, **overrides) -> LLMClient:
     async def recorder(model: str, purpose: str, user: str | None, usage: Usage) -> None:
         if recorded is not None:
             recorded.append((model, purpose, user, usage))
@@ -164,10 +160,7 @@ def test_invalid_json_after_repair_raises(tmp_path: Path) -> None:
 
 
 def test_parse_json_model_tolerates_chatter() -> None:
-    assert (
-        parse_json_model('Sonuç: {"city": "Van", "plate_code": 65} umarım yardımcı olur', CityProbe).city
-        == "Van"
-    )
+    assert parse_json_model('Sonuç: {"city": "Van", "plate_code": 65} umarım yardımcı olur', CityProbe).city == "Van"
     with pytest.raises(ValueError):
         parse_json_model("JSON yok", CityProbe)
 

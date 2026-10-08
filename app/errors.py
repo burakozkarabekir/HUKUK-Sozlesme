@@ -69,9 +69,7 @@ def register_error_handlers(app: FastAPI) -> None:
     async def _validation_error(_: Request, exc: RequestValidationError) -> JSONResponse:
         fields = sorted({".".join(str(p) for p in err.get("loc", []) if p != "body") for err in exc.errors()})
         suffix = f" Hatalı alanlar: {', '.join(f for f in fields if f)}" if fields else ""
-        return JSONResponse(
-            error_body("validation_error", "İstek verisi geçersiz." + suffix), status_code=422
-        )
+        return JSONResponse(error_body("validation_error", "İstek verisi geçersiz." + suffix), status_code=422)
 
     @app.exception_handler(Exception)
     async def _unhandled(_: Request, exc: Exception) -> JSONResponse:

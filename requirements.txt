@@ -1,5 +1,4 @@
-# Runtime dependencies (pinned). Later phases add: pypdf, pdfplumber,
-# openpyxl, numpy, bcrypt, msal.
+# Runtime dependencies (pinned).
 fastapi==0.142.4
 starlette==1.7.0
 uvicorn==0.54.0
@@ -10,3 +9,6 @@ httpx==0.28.1
 # Azure AI Foundry via the OpenAI SDK (Responses API). Brings in httpx2 + jiter.
 openai==3.26.0
 httpx2==2.13.1
+# PDF text extraction (pypdf primary, pdfplumber fallback).
+pypdf==6.19.0
+pdfplumber==0.11.10

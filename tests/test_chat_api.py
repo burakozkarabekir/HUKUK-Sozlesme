@@ -27,9 +27,7 @@ def parse_sse(text: str) -> list[tuple[str, dict]]:
 def make_client(tmp_path: Path, api: fakes.FakeResponses, **overrides) -> TestClient:
     settings = make_settings(tmp_path, **overrides)
     app = create_app(settings)
-    app.state.llm = LLMClient(
-        settings, responses_api=api, usage_recorder=make_db_usage_recorder(settings.db_path)
-    )
+    app.state.llm = LLMClient(settings, responses_api=api, usage_recorder=make_db_usage_recorder(settings.db_path))
     return TestClient(app)
 
 
@@ -86,9 +84,7 @@ def test_chat_validation_errors_are_json(tmp_path: Path) -> None:
         assert too_long.status_code == 413 and too_long.json()["error"]["code"] == "question_too_long"
         blank = client.post(f"{P}/api/chat", json={"message": "   "})
         assert blank.status_code == 400 and blank.json()["error"]["code"] == "empty_question"
-        bad_role = client.post(
-            f"{P}/api/chat", json={"message": "x", "history": [{"role": "system", "content": "y"}]}
-        )
+        bad_role = client.post(f"{P}/api/chat", json={"message": "x", "history": [{"role": "system", "content": "y"}]})
         assert bad_role.status_code == 422 and bad_role.json()["error"]["code"] == "validation_error"
 
 

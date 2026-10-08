@@ -53,9 +53,11 @@ class RequestContextMiddleware:
             if message["type"] == "http.response.start":
                 status_holder["status"] = message["status"]
                 headers = list(message.get("headers", []))
-                existing = {name.lower() for name, _ in headers}
+                existing = {name.lower(): value for name, value in headers}
+                # CSP is meaningless for PDFs and can break the browser's PDF viewer.
+                skip_csp = exempt or existing.get(b"content-type", b"").startswith(b"application/pdf")
                 for name, value in SECURITY_HEADERS:
-                    if name in existing or (exempt and name == b"content-security-policy"):
+                    if name in existing or (skip_csp and name == b"content-security-policy"):
                         continue
                     headers.append((name, value))
                 headers.append((b"x-request-id", request_id_var.get().encode()))

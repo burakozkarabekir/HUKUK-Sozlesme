@@ -61,9 +61,7 @@ Yalnızca JSON döndür.
 # Used by `cli.py check-llm`.
 CHECK_SIMPLE = "Bağlantı testi. Sadece 'TAMAM' yaz."
 CHECK_STREAM = "1'den 20'ye kadar sayıları aralarında boşluk bırakarak yaz."
-CHECK_JSON = (
-    "Aşağıdaki cümleden şehir adını ve plaka kodunu çıkar.\n<metin>İstanbul'un plaka kodu 34'tür.</metin>"
-)
+CHECK_JSON = "Aşağıdaki cümleden şehir adını ve plaka kodunu çıkar.\n<metin>İstanbul'un plaka kodu 34'tür.</metin>"
 
 
 def json_only_instructions(instructions: str, schema: dict[str, Any]) -> str:
@@ -79,8 +77,6 @@ def _escape_closing_tag(text: str, tag: str) -> str:
 def wrap_document(text: str, tag: str = "sozlesme_metni", **attrs: str | int | None) -> str:
     """Wrap untrusted text as data: <tag key="value">...</tag>."""
     rendered = "".join(
-        f' {key}="{str(value).replace(chr(34), chr(39))}"'
-        for key, value in attrs.items()
-        if value is not None
+        f' {key}="{str(value).replace(chr(34), chr(39))}"' for key, value in attrs.items() if value is not None
     )
     return f"<{tag}{rendered}>\n{_escape_closing_tag(text, tag)}\n</{tag}>"

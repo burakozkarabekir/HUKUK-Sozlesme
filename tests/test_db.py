@@ -18,8 +18,7 @@ def test_fts_triggers_keep_index_in_sync(tmp_path: Path) -> None:
     with transaction(conn):
         conn.execute("INSERT INTO contracts (contract_id, created_at, updated_at) VALUES ('c1', 'x', 'x')")
         conn.execute(
-            "INSERT INTO contract_files (contract_id, file_id, file_name, sha256)"
-            " VALUES ('c1', 'f1', 'a.pdf', 'h')"
+            "INSERT INTO contract_files (contract_id, file_id, file_name, sha256) VALUES ('c1', 'f1', 'a.pdf', 'h')"
         )
         conn.execute(
             "INSERT INTO chunks (contract_id, file_id, ordinal, text, text_norm)"

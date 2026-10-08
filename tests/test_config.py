@@ -44,9 +44,7 @@ def test_csv_helpers(tmp_path: Path) -> None:
     assert settings.vector_search_enabled is False
 
 
-def test_apply_network_env_does_not_override_existing(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
+def test_apply_network_env_does_not_override_existing(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("HTTPS_PROXY", "http://from-env:8080")
     monkeypatch.delenv("SSL_CERT_FILE", raising=False)
     settings = make_settings(tmp_path, HTTPS_PROXY="http://from-dotenv:3128", SSL_CERT_FILE="/tmp/ca.pem")

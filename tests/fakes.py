@@ -12,9 +12,7 @@ import openai
 _REQUEST = httpx2.Request("POST", "https://example.invalid/openai/v1/responses")
 
 
-def api_error(
-    cls: type[openai.APIStatusError], status: int, message: str, code: str | None = None
-) -> Exception:
+def api_error(cls: type[openai.APIStatusError], status: int, message: str, code: str | None = None) -> Exception:
     body = {"error": {"message": message, "code": code}}
     error = cls(message, response=httpx2.Response(status, request=_REQUEST, json=body), body=body)
     error.code = code

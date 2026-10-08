@@ -16,7 +16,7 @@ from fastapi.staticfiles import StaticFiles
 from starlette.requests import Request
 
 from app import __version__
-from app.api import routes_chat, routes_health, routes_me
+from app.api import routes_admin, routes_chat, routes_contracts, routes_health, routes_me
 from app.config import BASE_DIR, Settings, apply_network_env, get_settings
 from app.db import check_fts5, connect, migrate
 from app.errors import register_error_handlers
@@ -80,6 +80,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(routes_health.router)
     app.include_router(routes_me.router)
     app.include_router(routes_chat.router)
+    app.include_router(routes_contracts.router)
+    app.include_router(routes_admin.router)
 
     app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 

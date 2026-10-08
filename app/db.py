@@ -176,6 +176,21 @@ MIGRATIONS: list[tuple[int, str, str]] = [
         );
         """,
     ),
+    (
+        2,
+        "ingestion details",
+        """
+        ALTER TABLE contracts ADD COLUMN meta_norm TEXT NOT NULL DEFAULT '';
+        ALTER TABLE contracts ADD COLUMN source TEXT;
+        ALTER TABLE contract_files ADD COLUMN extract_method TEXT;
+        ALTER TABLE contract_files ADD COLUMN low_text_pages_json TEXT NOT NULL DEFAULT '[]';
+        ALTER TABLE contract_files ADD COLUMN error TEXT;
+        ALTER TABLE contract_files ADD COLUMN updated_at TEXT;
+        CREATE INDEX ix_contracts_end ON contracts(end_date);
+        CREATE INDEX ix_files_ocr ON contract_files(needs_ocr, ocr_status);
+        CREATE INDEX ix_sync_runs_status ON sync_runs(status, id);
+        """,
+    ),
 ]
 
 
@@ -187,6 +202,10 @@ def connect(db_path: Path) -> sqlite3.Connection:
     db_path.parent.mkdir(parents=True, exist_ok=True)
     conn = sqlite3.connect(db_path, timeout=30, isolation_level=None, check_same_thread=False)
     conn.row_factory = sqlite3.Row
+    # Turkish-aware folding usable in SQL (filters on metadata columns).
+    from app.ingest.normalize import fold
+
+    conn.create_function("tr_fold", 1, lambda v: fold(v) if isinstance(v, str) else v, deterministic=True)
     conn.execute("PRAGMA journal_mode=WAL")
     conn.execute("PRAGMA foreign_keys=ON")
     conn.execute("PRAGMA busy_timeout=30000")
@@ -265,5 +284,14 @@ def check_fts5() -> bool:
 
 
 def table_counts(conn: sqlite3.Connection) -> dict[str, int]:
-    tables = ["contracts", "contract_files", "chunks", "sync_runs", "analysis_jobs", "audit_log"]
+    tables = [
+        "contracts",
+        "contract_files",
+        "chunks",
+        "embeddings",
+        "sync_runs",
+        "analysis_jobs",
+        "llm_usage",
+        "audit_log",
+    ]
     return {t: int(conn.execute(f"SELECT COUNT(*) FROM {t}").fetchone()[0]) for t in tables}  # noqa: S608

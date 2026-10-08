@@ -3,8 +3,8 @@
 Usage:
     python cli.py migrate          # apply DB migrations
     python cli.py stats            # row counts and schema version
-    python cli.py sync             # (phase 3)
-    python cli.py reindex          # (phase 3)
+    python cli.py sync [--full]    # fetch + index contracts (incremental)
+    python cli.py reindex          # re-chunk stored PDFs, rebuild FTS
     python cli.py check-llm        # LLM connectivity + supported features
     python cli.py check-turkuaz    # (phase 6)
 """
@@ -103,9 +103,7 @@ async def _run_llm_checks(client: LLMClient) -> int:
     stream_chunks: list[str] = []
 
     async def streaming() -> str:
-        stream = client.stream_text(
-            prompts.BASE_RULES, prompts.CHECK_STREAM, purpose="check", allow_fallback=False
-        )
+        stream = client.stream_text(prompts.BASE_RULES, prompts.CHECK_STREAM, purpose="check", allow_fallback=False)
         async for chunk in stream:
             stream_chunks.append(chunk)
         if len(stream_chunks) < 2:
@@ -123,9 +121,7 @@ async def _run_llm_checks(client: LLMClient) -> int:
         print("\nTemel çağrı başarısız; diğer adımlar atlandı. Sorun giderme için README'ye bakın.")
         return 1
     ok_stream = await _check_step("2/4 Streaming", streaming)
-    ok_schema = await _check_step(
-        "3/4 Yapılandırılmış çıktı (json_schema)", lambda: structured("json_schema")
-    )
+    ok_schema = await _check_step("3/4 Yapılandırılmış çıktı (json_schema)", lambda: structured("json_schema"))
     ok_prompt = await _check_step("4/4 Prompt ile JSON (yedek yöntem)", lambda: structured("prompt"))
 
     print("\nÖnerilen .env ayarları:")
@@ -145,6 +141,39 @@ def cmd_check_llm(_: argparse.Namespace) -> int:
     return asyncio.run(run_check_llm(settings))
 
 
+def cmd_sync(args: argparse.Namespace) -> int:
+    from app.ingest.pipeline import SyncAlreadyRunning, run_sync
+
+    settings = get_settings()
+    apply_network_env(settings)
+    try:
+        stats = run_sync(settings, trigger=args.trigger, triggered_by="cli", full=args.full)
+    except SyncAlreadyRunning as exc:
+        print(f"⚠️  {exc.message}", file=sys.stderr)
+        return 3
+    print(f"Senkronizasyon #{stats.run_id}: {stats.status}")
+    print(f"  Yeni: {stats.new}  Güncellenen: {stats.updated}  Değişmeyen: {stats.unchanged}  Silinen: {stats.deleted}")
+    for error in stats.errors[:20]:
+        print(f"  ❌ {error['contract_id'] or '-'}: {error['message']}")
+    if len(stats.errors) > 20:
+        print(f"  ... ve {len(stats.errors) - 20} hata daha")
+    return 0 if stats.status == "success" else 1
+
+
+def cmd_reindex(_: argparse.Namespace) -> int:
+    from app.ingest.pipeline import SyncAlreadyRunning, reindex
+
+    settings = get_settings()
+    apply_network_env(settings)
+    try:
+        counts = reindex(settings)
+    except SyncAlreadyRunning as exc:
+        print(f"⚠️  {exc.message}", file=sys.stderr)
+        return 3
+    print(f"Yeniden indekslendi: {counts['files']} dosya, {counts['chunks']} madde, {counts['errors']} hata")
+    return 0 if counts["errors"] == 0 else 1
+
+
 def _not_yet(phase: int):
     def handler(args: argparse.Namespace) -> int:
         print(f"'{args.command}' komutu Faz {phase}'te eklenecek.", file=sys.stderr)
@@ -158,8 +187,13 @@ def build_parser() -> argparse.ArgumentParser:
     sub = parser.add_subparsers(dest="command", required=True)
     sub.add_parser("migrate", help="Veritabanı migration'larını uygula").set_defaults(func=cmd_migrate)
     sub.add_parser("stats", help="Kayıt sayılarını göster").set_defaults(func=cmd_stats)
-    sub.add_parser("sync", help="Sözleşmeleri senkronize et").set_defaults(func=_not_yet(3))
-    sub.add_parser("reindex", help="İndeksi yeniden oluştur").set_defaults(func=_not_yet(3))
+    sync = sub.add_parser("sync", help="Sözleşmeleri kaynaktan çek ve indeksle (incremental)")
+    sync.add_argument("--full", action="store_true", help="Tümünü tara; kaynakta olmayanları sil")
+    sync.add_argument("--trigger", default="cli", choices=["cli", "timer"], help=argparse.SUPPRESS)
+    sync.set_defaults(func=cmd_sync)
+    sub.add_parser("reindex", help="Saklanan PDF'lerden maddeleri ve FTS indeksini yeniden oluştur").set_defaults(
+        func=cmd_reindex
+    )
     sub.add_parser("check-llm", help="LLM bağlantısını ve desteklenen yöntemleri test et").set_defaults(
         func=cmd_check_llm
     )

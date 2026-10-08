@@ -88,6 +88,10 @@ class Settings(BaseSettings):
     OCR_ENABLED: bool = False
     DOC_INTELLIGENCE_ENDPOINT: str = ""
     DOC_INTELLIGENCE_KEY: SecretStr = SecretStr("")
+    # VARSAYIM: GA REST API version of Document Intelligence at the time of writing.
+    DOC_INTELLIGENCE_API_VERSION: str = "2024-11-30"
+    # Pages with fewer extracted characters count as "scanned".
+    OCR_MIN_CHARS_PER_PAGE: int = Field(default=40, ge=0)
 
     # --- Authentication ---
     AUTH_MODE: Literal["none", "basic", "entra"] = "none"

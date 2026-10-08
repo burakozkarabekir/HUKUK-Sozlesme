@@ -70,9 +70,7 @@ async def chat(
     if not question:
         raise AppError("empty_question", "Lütfen bir soru yazın.", 400)
     if len(question) > settings.CHAT_MAX_QUESTION_CHARS:
-        raise AppError(
-            "question_too_long", f"Soru en fazla {settings.CHAT_MAX_QUESTION_CHARS} karakter olabilir.", 413
-        )
+        raise AppError("question_too_long", f"Soru en fazla {settings.CHAT_MAX_QUESTION_CHARS} karakter olabilir.", 413)
     llm.ensure_configured()
 
     # Audit: user question and IDs only, never answers or contract text.

@@ -100,9 +100,7 @@ def map_openai_error(exc: Exception) -> LLMError:
         },
     )
     if isinstance(exc, openai.APITimeoutError):
-        return LLMError(
-            "llm_timeout", "Yapay zeka servisi zamanında yanıt vermedi. Lütfen tekrar deneyin.", 504
-        )
+        return LLMError("llm_timeout", "Yapay zeka servisi zamanında yanıt vermedi. Lütfen tekrar deneyin.", 504)
     if isinstance(exc, openai.APIConnectionError):
         return LLMError(
             "llm_unreachable",
@@ -140,9 +138,7 @@ def map_openai_error(exc: Exception) -> LLMError:
                 422,
             )
         return LLMError("llm_bad_request", "Yapay zeka servisi isteği geçersiz buldu.", 502)
-    return LLMError(
-        "llm_server_error", "Yapay zeka servisinde geçici bir hata oluştu. Lütfen tekrar deneyin.", 502
-    )
+    return LLMError("llm_server_error", "Yapay zeka servisinde geçici bir hata oluştu. Lütfen tekrar deneyin.", 502)
 
 
 def _looks_unsupported(exc: Exception, feature_hints: tuple[str, ...]) -> bool:
@@ -312,9 +308,7 @@ class LLMClient:
         call_instructions = instructions
 
         if current == "json_schema":
-            text_format = {
-                "format": {"type": "json_schema", "name": spec.name, "schema": spec.schema, "strict": True}
-            }
+            text_format = {"format": {"type": "json_schema", "name": spec.name, "schema": spec.schema, "strict": True}}
             kwargs = self._kwargs(instructions, llm_input, text=text_format)
             try:
                 result = await self._create_raw(kwargs)
@@ -338,17 +332,13 @@ class LLMClient:
         try:
             parsed = parse_json_model(result.text, spec.model)
         except ValueError as first_error:
-            logger.warning(
-                "llm_json_invalid_repairing", extra={"purpose": purpose, "error": str(first_error)[:300]}
-            )
+            logger.warning("llm_json_invalid_repairing", extra={"purpose": purpose, "error": str(first_error)[:300]})
             repair_input = [
                 *_as_messages(llm_input),
                 {"role": "assistant", "content": result.text[:8000]},
                 {
                     "role": "user",
-                    "content": prompts.JSON_REPAIR.format(
-                        error=str(first_error)[:1000], previous=result.text[:8000]
-                    ),
+                    "content": prompts.JSON_REPAIR.format(error=str(first_error)[:1000], previous=result.text[:8000]),
                 },
             ]
             try:
@@ -444,9 +434,7 @@ class TextStream:
                                 parts.append(delta)
                                 yield delta
                         elif event_type in ("response.completed", "response.incomplete"):
-                            usage = Usage.from_response(
-                                getattr(getattr(event, "response", None), "usage", None)
-                            )
+                            usage = Usage.from_response(getattr(getattr(event, "response", None), "usage", None))
                         elif event_type in ("response.failed", "error"):
                             logger.warning("llm_stream_failed_event", extra={"event_type": event_type})
                             raise LLMError(

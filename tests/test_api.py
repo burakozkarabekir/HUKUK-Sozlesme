@@ -33,10 +33,7 @@ def test_security_headers(client: TestClient) -> None:
 
 def test_request_id_is_echoed_only_when_safe(client: TestClient) -> None:
     assert client.get(f"{P}/health", headers={"X-Request-ID": "abc-123"}).headers["x-request-id"] == "abc-123"
-    assert (
-        client.get(f"{P}/health", headers={"X-Request-ID": "bad id\x7f"}).headers["x-request-id"]
-        != "bad id\x7f"
-    )
+    assert client.get(f"{P}/health", headers={"X-Request-ID": "bad id\x7f"}).headers["x-request-id"] != "bad id\x7f"
 
 
 def test_not_found_uses_error_format(client: TestClient) -> None:
@@ -85,14 +82,27 @@ def test_without_root_path(tmp_path) -> None:
         assert plain.get("/health").status_code == 200
 
 
+def _static_js() -> dict[str, str]:
+    return {p.name: p.read_text(encoding="utf-8") for p in STATIC_DIR.glob("*.js")}
+
+
 def test_frontend_uses_only_relative_urls() -> None:
     html = (STATIC_DIR / "index.html").read_text(encoding="utf-8")
-    js = (STATIC_DIR / "app.js").read_text(encoding="utf-8")
     assert not re.search(r'(?:src|href)="/(?!/)', html), "absolute URL in index.html"
-    assert not re.search(r"""(?:api|fetch)\(\s*["'`]/""", js), "absolute fetch path in app.js"
     assert not re.search(r"https?://", html), "external URL (CDN) in index.html"
+    for name, js in _static_js().items():
+        assert not re.search(r"""(?:api|fetch|apiStream)\(\s*["'`]/""", js), f"absolute fetch path in {name}"
+        assert not re.search(r"""["'`]https?://""", js), f"external URL in {name}"
 
 
 def test_frontend_never_uses_inner_html() -> None:
-    js = (STATIC_DIR / "app.js").read_text(encoding="utf-8")
-    assert "innerHTML" not in js.replace("NEVER written with innerHTML", "")
+    for name, js in _static_js().items():
+        code = re.sub(r"/\*.*?\*/", "", js, flags=re.S)  # ignore comments
+        assert "innerHTML" not in code and "outerHTML" not in code and "insertAdjacentHTML" not in code, name
+        assert "document.write" not in code and "eval(" not in code, name
+
+
+def test_all_scripts_are_loaded_by_index() -> None:
+    html = (STATIC_DIR / "index.html").read_text(encoding="utf-8")
+    for name in _static_js():
+        assert f'src="static/{name}"' in html, name

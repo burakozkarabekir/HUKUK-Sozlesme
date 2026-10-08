@@ -8,6 +8,10 @@
   <!-- All URLs are relative so the app works under /sozlesme/ behind nginx. -->
   <link rel="stylesheet" href="static/app.css">
   <script src="static/markdown.js" defer></script>
+  <script src="static/core.js" defer></script>
+  <script src="static/chat.js" defer></script>
+  <script src="static/contracts.js" defer></script>
+  <script src="static/admin.js" defer></script>
   <script src="static/app.js" defer></script>
 </head>
 <body>
@@ -17,6 +21,7 @@
     <span class="env-badge hidden" id="env-badge"></span>
     <span class="spacer"></span>
     <span class="user-name" id="user-name" title="Giriş yapan kullanıcı"></span>
+    <a class="logout hidden" id="logout" href="auth/logout">Çıkış</a>
   </header>
 
   <div class="layout">
@@ -64,21 +69,95 @@
 
       <section class="view" id="view-sozlesmeler" data-title="Sözleşmeler">
         <h2>📄 Sözleşmeler</h2>
-        <p class="muted">Senkronize edilen sözleşmeleri arayın, maddelerini ve OCR durumunu görüntüleyin.</p>
-        <div class="placeholder">Bu ekran Faz 3'te etkinleşecek.</div>
+        <div id="ct-list">
+          <div class="filters">
+            <input type="search" id="ct-q" placeholder="Sözleşme no, başlık veya taraf ara…" aria-label="Ara">
+            <select id="ct-type" aria-label="Sözleşme tipi"><option value="">Tüm tipler</option></select>
+            <select id="ct-status" aria-label="Durum"><option value="">Tüm durumlar</option></select>
+            <input type="text" id="ct-party" placeholder="Taraf" aria-label="Taraf">
+            <label class="check"><input type="checkbox" id="ct-active"> Sadece yürürlükte</label>
+          </div>
+          <div class="table-wrap">
+            <table class="table">
+              <thead><tr><th>Sözleşme No</th><th>Başlık</th><th>Taraflar</th><th>Tip</th><th>Süre</th><th>Durum</th><th>Metin</th></tr></thead>
+              <tbody id="ct-rows"></tbody>
+            </table>
+          </div>
+          <div class="pager">
+            <span class="muted" id="ct-count"></span>
+            <span class="spacer"></span>
+            <button type="button" class="btn btn-secondary btn-sm" id="ct-prev">‹ Önceki</button>
+            <span id="ct-page"></span>
+            <button type="button" class="btn btn-secondary btn-sm" id="ct-next">Sonraki ›</button>
+          </div>
+        </div>
+        <div id="ct-detail" class="hidden"></div>
       </section>
 
       <section class="view" id="view-yonetim" data-title="Yönetim">
-        <h2>⚙️ Yönetim</h2>
-        <p class="muted">Senkronizasyon durumu, OCR bekleyen sözleşmeler, token kullanımı ve bağımlılık sağlığı.</p>
-        <div class="card">
-          <h3>Uygulama Durumu</h3>
-          <dl class="kv" id="health-info"><dt>Durum</dt><dd>Yükleniyor…</dd></dl>
+        <div class="view-header">
+          <h2>⚙️ Yönetim</h2>
+          <button type="button" class="btn btn-secondary btn-sm" id="adm-refresh">↻ Yenile</button>
         </div>
-        <div class="placeholder">Diğer yönetim işlevleri Faz 3 ve Faz 7'de etkinleşecek.</div>
+        <div class="stats" id="adm-counts"></div>
+        <div class="grid-2">
+          <div class="card">
+            <h3>Senkronizasyon</h3>
+            <div class="row">
+              <button type="button" class="btn btn-primary" id="adm-sync-btn">Şimdi Senkronize Et</button>
+              <label class="check" title="Tüm sözleşmeleri baştan tarar; kaynakta artık olmayanları siler.">
+                <input type="checkbox" id="adm-sync-full"> Tam tarama</label>
+              <span class="muted" id="adm-sync-state"></span>
+            </div>
+            <p class="muted small">Otomatik senkronizasyon her gece 02:00'de çalışır.</p>
+          </div>
+          <div class="card">
+            <h3>Yapılandırma</h3>
+            <div id="adm-config"></div>
+          </div>
+        </div>
+        <div class="card">
+          <h3>Son senkronizasyonlar</h3>
+          <div class="table-wrap"><table class="table">
+            <thead><tr><th>#</th><th>Başlangıç</th><th>Durum</th><th>Tetikleyen</th><th>Yeni / Güncel. / Aynı</th><th>Hatalar</th><th>Bitiş</th></tr></thead>
+            <tbody id="adm-runs"></tbody>
+          </table></div>
+        </div>
+        <div class="grid-2">
+          <div class="card">
+            <h3>Günlük token kullanımı</h3>
+            <p>Bugün: <strong id="adm-tokens-today">—</strong></p>
+            <div class="table-wrap"><table class="table">
+              <thead><tr><th>Gün (UTC)</th><th>Çağrı</th><th>Girdi</th><th>Çıktı</th><th>Toplam</th></tr></thead>
+              <tbody id="adm-tokens"></tbody>
+            </table></div>
+          </div>
+          <div class="card">
+            <h3>Bağımlılık sağlığı</h3>
+            <p class="muted small">Veritabanı, yapay zeka servisi, sözleşme kaynağı ve OCR bağlantılarını test eder.</p>
+            <button type="button" class="btn btn-secondary" id="adm-deps-btn">Bağlantıları Kontrol Et</button>
+            <div id="adm-deps"></div>
+          </div>
+        </div>
+        <div class="card">
+          <h3>OCR gerektiren dosyalar <span class="muted" id="adm-ocr-count"></span></h3>
+          <p class="muted small">Taranmış PDF'lerden metin çıkarılamadı. OCR_ENABLED=true ile Azure Document Intelligence kullanılabilir.</p>
+          <div class="table-wrap"><table class="table">
+            <thead><tr><th>Sözleşme No</th><th>Başlık</th><th>Dosya</th><th>Sayfa</th><th>Durum</th></tr></thead>
+            <tbody id="adm-ocr"></tbody>
+          </table></div>
+        </div>
       </section>
     </main>
   </div>
+
+  <aside class="source-panel" id="source-panel" aria-hidden="true" aria-label="Kaynak madde">
+    <div class="source-panel-header">
+      <strong>Kaynak</strong>
+      <button type="button" class="btn-link" id="source-panel-close" aria-label="Kapat">✕</button>
+    </div>
+    <div class="source-panel-body" id="source-panel-body"></div>
+  </aside>
 
   <footer class="disclaimer" role="note">
     Bu çıktılar yapay zeka tarafından üretilmiştir ve hukuki görüş niteliği taşımaz.
