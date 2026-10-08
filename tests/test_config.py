@@ -16,7 +16,29 @@ def test_prod_with_auth_none_is_rejected(tmp_path: Path) -> None:
 
 
 def test_prod_with_basic_auth_is_allowed(tmp_path: Path) -> None:
-    assert make_settings(tmp_path, APP_ENV="prod", AUTH_MODE="basic").APP_ENV == "prod"
+    users = "ali:$2b$12$abcdefghijklmnopqrstuuF0XyZ7z6r5Ue8m6a1pQx3o1Y5x0aB2C"
+    assert make_settings(tmp_path, APP_ENV="prod", AUTH_MODE="basic", BASIC_AUTH_USERS=users).APP_ENV == "prod"
+
+
+def test_basic_requires_users(tmp_path: Path) -> None:
+    with pytest.raises(ValidationError, match="BASIC_AUTH_USERS"):
+        make_settings(tmp_path, AUTH_MODE="basic")
+    with pytest.raises(ValidationError, match="geçersiz"):
+        make_settings(tmp_path, AUTH_MODE="basic", BASIC_AUTH_USERS="ali:plaintext")
+
+
+def test_entra_requires_settings_and_strong_secret(tmp_path: Path) -> None:
+    with pytest.raises(ValidationError, match="ENTRA_TENANT_ID"):
+        make_settings(tmp_path, AUTH_MODE="entra")
+    full = {
+        "ENTRA_TENANT_ID": "t",
+        "ENTRA_CLIENT_ID": "c",
+        "ENTRA_CLIENT_SECRET": "s",
+        "ENTRA_REDIRECT_URI": "https://x/sozlesme/auth/callback",
+    }
+    with pytest.raises(ValidationError, match="32"):
+        make_settings(tmp_path, AUTH_MODE="entra", SESSION_SECRET_KEY="kisa", **full)
+    assert make_settings(tmp_path, AUTH_MODE="entra", SESSION_SECRET_KEY="x" * 40, **full).AUTH_MODE == "entra"
 
 
 @pytest.mark.parametrize(

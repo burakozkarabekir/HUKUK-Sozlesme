@@ -25,6 +25,8 @@ from app.api import (
     routes_me,
     routes_search,
 )
+from app.auth import AuthMiddleware
+from app.auth.session import Signer
 from app.config import BASE_DIR, Settings, apply_network_env, get_settings
 from app.db import check_fts5, connect, migrate
 from app.errors import register_error_handlers
@@ -87,7 +89,16 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.state.llm = LLMClient(settings, usage_recorder=make_db_usage_recorder(settings.db_path))
 
     register_error_handlers(app)
+    # Order: RequestContext (outermost: request id, headers, access log) -> Auth -> app.
+    signer = Signer(settings.SESSION_SECRET_KEY.get_secret_value())
+    app.state.signer = signer
+    app.add_middleware(AuthMiddleware, settings=settings, signer=signer)
     app.add_middleware(RequestContextMiddleware)
+    if settings.AUTH_MODE == "entra":
+        from app.auth import entra
+
+        app.state.msal_factory = entra.build_msal_app
+        app.include_router(entra.router)
 
     app.include_router(routes_health.router)
     app.include_router(routes_me.router)
@@ -109,6 +120,15 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             # Relative Location: an absolute one would carry the upstream host
             # (127.0.0.1:8001) instead of the public nginx host.
             return Response(status_code=307, headers={"location": root + "/"})
+        if getattr(request.state, "user", None) is None and settings.AUTH_MODE != "none":
+            if settings.AUTH_MODE == "entra":
+                return Response(status_code=302, headers={"location": root + "/auth/login"})
+            return Response(
+                "Bu uygulamayı kullanmak için kullanıcı adı ve şifre ile giriş yapmalısınız.",
+                status_code=401,
+                media_type="text/plain; charset=utf-8",
+                headers={"WWW-Authenticate": 'Basic realm="Sozlesme", charset="UTF-8"'},
+            )
         return FileResponse(STATIC_DIR / "index.html", headers={"Cache-Control": "no-cache"})
 
     return app

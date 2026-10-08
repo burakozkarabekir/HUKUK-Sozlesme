@@ -8,6 +8,7 @@ Usage:
     python cli.py embed            # create missing embeddings (vector search)
     python cli.py check-llm        # LLM connectivity + supported features
     python cli.py check-turkuaz    # Turkuaz connectivity + raw field names [--out x.json]
+    python cli.py hash-password    # bcrypt hash for BASIC_AUTH_USERS
 """
 
 from __future__ import annotations
@@ -312,6 +313,24 @@ def run_check_turkuaz(settings: Settings, source: object | None = None, out: str
     return 0
 
 
+def cmd_hash_password(_: argparse.Namespace) -> int:
+    import getpass
+
+    from app.auth.basic import hash_password
+
+    username = input("Kullanıcı adı: ").strip()
+    password = getpass.getpass("Şifre: ")
+    if not username or ":" in username or "," in username or len(password) < 10:
+        print("Kullanıcı adı ':' veya ',' içeremez; şifre en az 10 karakter olmalı.", file=sys.stderr)
+        return 2
+    if getpass.getpass("Şifre (tekrar): ") != password:
+        print("Şifreler eşleşmiyor.", file=sys.stderr)
+        return 2
+    print("\n.env içindeki BASIC_AUTH_USERS değerine ekleyin (tek tırnak içinde, virgülle ayırarak):")
+    print(f"{username}:{hash_password(password)}")
+    return 0
+
+
 def cmd_check_turkuaz(args: argparse.Namespace) -> int:
     settings = get_settings()
     apply_network_env(settings)
@@ -335,6 +354,9 @@ def build_parser() -> argparse.ArgumentParser:
     )
     sub.add_parser("check-llm", help="LLM bağlantısını ve desteklenen yöntemleri test et").set_defaults(
         func=cmd_check_llm
+    )
+    sub.add_parser("hash-password", help="AUTH_MODE=basic için bcrypt şifre özeti üret").set_defaults(
+        func=cmd_hash_password
     )
     turkuaz = sub.add_parser("check-turkuaz", help="Turkuaz'a bağlan, ilk kayıtları ve alan adlarını göster")
     turkuaz.add_argument("--out", help="Ham JSON örneklerini bu dosyaya yaz (base64 içerik kısaltılır)")

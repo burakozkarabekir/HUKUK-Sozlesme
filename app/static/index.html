@@ -268,6 +268,14 @@
           </div>
         </div>
         <div class="card">
+          <h3>Son işlemler (audit kaydı)</h3>
+          <p class="muted small">Kim, ne zaman, hangi işlemi yaptı. Sözleşme metinleri ve model cevapları kaydedilmez.</p>
+          <div class="table-wrap"><table class="table">
+            <thead><tr><th>Zaman</th><th>Kullanıcı</th><th>İşlem</th><th>Hedef</th><th>Ayrıntı</th></tr></thead>
+            <tbody id="adm-audit"></tbody>
+          </table></div>
+        </div>
+        <div class="card">
           <h3>OCR gerektiren dosyalar <span class="muted" id="adm-ocr-count"></span></h3>
           <p class="muted small">Taranmış PDF'lerden metin çıkarılamadı. OCR_ENABLED=true ile Azure Document Intelligence kullanılabilir.</p>
           <div class="table-wrap"><table class="table">

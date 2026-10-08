@@ -112,6 +112,9 @@ class Settings(BaseSettings):
     ADMIN_GROUP_IDS: str = ""
     # VARSAYIM: Needed to sign session cookies (basic/entra). Empty -> random per process.
     SESSION_SECRET_KEY: SecretStr = SecretStr("")
+    # VARSAYIM: Session lifetime and cookie flags (Secure requires HTTPS in front).
+    SESSION_MAX_AGE_HOURS: int = Field(default=8, ge=1, le=72)
+    SESSION_COOKIE_SECURE: bool = True
 
     # --- Impact analysis ---
     # VARSAYIM: Defaults for candidate selection and background jobs.
@@ -165,6 +168,25 @@ class Settings(BaseSettings):
                 "AUTH_MODE=none üretim ortamında (APP_ENV=prod) kullanılamaz. "
                 "AUTH_MODE=basic veya AUTH_MODE=entra ayarlayın."
             )
+        if self.AUTH_MODE == "basic":
+            from app.auth.basic import parse_users
+
+            if not parse_users(self.BASIC_AUTH_USERS.get_secret_value()):
+                raise ConfigError("AUTH_MODE=basic için BASIC_AUTH_USERS tanımlanmalı (python cli.py hash-password).")
+        if self.AUTH_MODE == "entra":
+            required = {
+                "ENTRA_TENANT_ID": self.ENTRA_TENANT_ID,
+                "ENTRA_CLIENT_ID": self.ENTRA_CLIENT_ID,
+                "ENTRA_CLIENT_SECRET": self.ENTRA_CLIENT_SECRET.get_secret_value(),
+                "ENTRA_REDIRECT_URI": self.ENTRA_REDIRECT_URI,
+                # Shared by all workers, otherwise a session from worker A is invalid on worker B.
+                "SESSION_SECRET_KEY": self.SESSION_SECRET_KEY.get_secret_value(),
+            }
+            missing = [name for name, value in required.items() if not value.strip()]
+            if missing:
+                raise ConfigError(f"AUTH_MODE=entra için eksik ayarlar: {', '.join(missing)}")
+            if len(self.SESSION_SECRET_KEY.get_secret_value()) < 32:
+                raise ConfigError("SESSION_SECRET_KEY en az 32 karakter olmalı.")
         return self
 
     # --- Derived helpers ---

@@ -68,12 +68,44 @@
     );
   }
 
+  const ACTIONS = {
+    "chat.ask": "Sohbet sorusu", search: "Keyword arama", "contract.view": "Sözleşme görüntüleme",
+    "contract.file_view": "PDF görüntüleme", "contract.clause_view": "Madde görüntüleme", "impact.extract": "Kavram çıkarma",
+    "impact.run": "Etki analizi başlatma", "impact.view": "Analiz görüntüleme", "impact.export": "Excel indirme",
+    "impact.cancel": "Analiz iptali", "admin.sync": "Manuel senkronizasyon", "auth.login": "Giriş", "auth.logout": "Çıkış",
+  };
+
+  function auditDetail(item) {
+    const d = item.details || {};
+    if (d.question) return `“${d.question}”`;
+    if (d.q) return `“${d.q}” (${d.total ?? "?"} sonuç)`;
+    return Object.entries(d).filter(([, v]) => v !== null && v !== "" && !(Array.isArray(v) && !v.length))
+      .map(([k, v]) => `${k}: ${typeof v === "object" ? JSON.stringify(v) : v}`).join(", ").slice(0, 200);
+  }
+
+  async function loadAudit() {
+    try {
+      const data = await api("api/admin/audit?limit=50");
+      $("#adm-audit").replaceChildren(
+        ...(data.items.length
+          ? data.items.map((a) => el("tr", {},
+              el("td", { class: "nowrap" }, fmtDateTime(a.ts)), el("td", {}, a.user_id || "—"),
+              el("td", {}, ACTIONS[a.action] || a.action), el("td", { class: "small" }, (a.target_ids || []).join(", ") || "—"),
+              el("td", { class: "small" }, auditDetail(a) || "—")))
+          : [emptyRow(5, "Kayıt yok.")]),
+      );
+    } catch (err) {
+      $("#adm-audit").replaceChildren(emptyRow(5, err.message));
+    }
+  }
+
   async function load() {
     try {
       renderStatus(await api("api/admin/status"));
     } catch (err) {
       Core.showError(err.message);
     }
+    loadAudit();
   }
 
   async function startSync() {

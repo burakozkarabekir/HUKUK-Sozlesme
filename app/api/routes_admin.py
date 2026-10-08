@@ -88,6 +88,22 @@ def status(
     }
 
 
+@router.get("/audit")
+def audit_log(
+    limit: int = 100,
+    user: CurrentUser = Depends(require_admin),
+    conn: sqlite3.Connection = Depends(get_db),
+) -> dict:
+    rows = conn.execute("SELECT * FROM audit_log ORDER BY id DESC LIMIT ?", (max(1, min(limit, 500)),)).fetchall()
+    items = []
+    for row in rows:
+        data = dict(row)
+        data["target_ids"] = json.loads(data.pop("target_ids_json") or "[]")
+        data["details"] = json.loads(data.pop("details_json") or "{}")
+        items.append(data)
+    return {"items": items}
+
+
 def _today() -> str:
     from datetime import UTC, datetime
 

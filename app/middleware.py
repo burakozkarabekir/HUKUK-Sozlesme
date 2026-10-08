@@ -24,6 +24,8 @@ SECURITY_HEADERS: list[tuple[bytes, bytes]] = [
     # SAMEORIGIN (not DENY) so our own PDFs can be embedded in the side panel.
     (b"x-frame-options", b"SAMEORIGIN"),
     (b"referrer-policy", b"same-origin"),
+    (b"permissions-policy", b"camera=(), microphone=(), geolocation=(), payment=()"),
+    (b"cross-origin-opener-policy", b"same-origin"),
 ]
 # Swagger UI loads assets from a CDN; it is only enabled outside prod.
 _CSP_EXEMPT_SUFFIXES = ("/docs", "/redoc", "/docs/oauth2-redirect")
