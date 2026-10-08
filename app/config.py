@@ -66,6 +66,10 @@ class Settings(BaseSettings):
     CHAT_HISTORY_MESSAGES: int = Field(default=10, ge=0)
     CHAT_MAX_QUESTION_CHARS: int = Field(default=4000, gt=0)
     CHAT_MAX_PROMPT_CHARS: int = Field(default=60_000, gt=0)
+    # Number of clauses retrieved as sources per question.
+    CHAT_TOP_K: int = Field(default=8, ge=1, le=50)
+    # Rewrite follow-up questions into a standalone search query with the LLM.
+    CHAT_REWRITE_QUERY: bool = True
 
     # --- Contract source ---
     CONTRACT_SOURCE: Literal["local", "turkuaz", "mock"] = "local"

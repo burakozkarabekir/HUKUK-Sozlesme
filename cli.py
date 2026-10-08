@@ -5,6 +5,7 @@ Usage:
     python cli.py stats            # row counts and schema version
     python cli.py sync [--full]    # fetch + index contracts (incremental)
     python cli.py reindex          # re-chunk stored PDFs, rebuild FTS
+    python cli.py embed            # create missing embeddings (vector search)
     python cli.py check-llm        # LLM connectivity + supported features
     python cli.py check-turkuaz    # (phase 6)
 """
@@ -174,6 +175,27 @@ def cmd_reindex(_: argparse.Namespace) -> int:
     return 0 if counts["errors"] == 0 else 1
 
 
+def cmd_embed(_: argparse.Namespace) -> int:
+    settings = get_settings()
+    apply_network_env(settings)
+    if not settings.vector_search_enabled:
+        print("EMBEDDING_MODEL tanımlı değil; vektör arama kapalı.", file=sys.stderr)
+        return 2
+    from app.services.embeddings import embed_missing, make_sync_embedder
+
+    conn = connect(settings.db_path)
+    try:
+        migrate(conn)
+        count = embed_missing(conn, settings, make_sync_embedder(settings))
+    except AppError as exc:
+        print(f"❌ {exc.message}", file=sys.stderr)
+        return 1
+    finally:
+        conn.close()
+    print(f"{count} madde için embedding üretildi.")
+    return 0
+
+
 def _not_yet(phase: int):
     def handler(args: argparse.Namespace) -> int:
         print(f"'{args.command}' komutu Faz {phase}'te eklenecek.", file=sys.stderr)
@@ -193,6 +215,9 @@ def build_parser() -> argparse.ArgumentParser:
     sync.set_defaults(func=cmd_sync)
     sub.add_parser("reindex", help="Saklanan PDF'lerden maddeleri ve FTS indeksini yeniden oluştur").set_defaults(
         func=cmd_reindex
+    )
+    sub.add_parser("embed", help="Embedding'i eksik maddeler için vektör üret (EMBEDDING_MODEL)").set_defaults(
+        func=cmd_embed
     )
     sub.add_parser("check-llm", help="LLM bağlantısını ve desteklenen yöntemleri test et").set_defaults(
         func=cmd_check_llm

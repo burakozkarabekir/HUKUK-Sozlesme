@@ -10,6 +10,7 @@
   <script src="static/markdown.js" defer></script>
   <script src="static/core.js" defer></script>
   <script src="static/chat.js" defer></script>
+  <script src="static/search.js" defer></script>
   <script src="static/contracts.js" defer></script>
   <script src="static/admin.js" defer></script>
   <script src="static/app.js" defer></script>
@@ -44,9 +45,13 @@
         <div class="chat-log" id="chat-log" aria-live="polite">
           <div class="chat-empty" id="chat-empty">
             <p class="muted">Sözleşmeler hakkında doğal dilde soru sorun. Her cevap kaynak gösterir (sözleşme no, madde, sayfa).</p>
-            <p class="notice">ℹ️ Sözleşme arşivinde arama Faz 4'te etkinleşecek. Şu an asistan sözleşme metinlerine erişemez.</p>
+            <p class="notice">ℹ️ Asistan sadece arşivdeki sözleşme maddelerine dayanarak cevap verir. Kaynak numarasına tıklayarak ilgili maddeyi ve PDF sayfasını açabilirsiniz.</p>
             <div class="examples" id="chat-examples"></div>
           </div>
+        </div>
+        <div class="chat-scope">
+          <label for="chat-scope">Kapsam:</label>
+          <select id="chat-scope"><option value="">Tüm sözleşmeler</option></select>
         </div>
         <form class="chat-form" id="chat-form">
           <textarea id="chat-input" rows="2" maxlength="4000"
@@ -63,8 +68,25 @@
 
       <section class="view" id="view-arama" data-title="Keyword Arama">
         <h2>🔎 Keyword Arama</h2>
-        <p class="muted">Bir veya birden fazla kelimeyle tüm sözleşmelerde geçen maddeleri bulun.</p>
-        <div class="placeholder">Bu ekran Faz 4'te etkinleşecek.</div>
+        <form id="sr-form" class="search-form">
+          <div class="row">
+            <input type="search" id="sr-q" maxlength="300" placeholder='Kelimeler veya "tam ifade" (ör. fesih "yazılı bildirim")' aria-label="Arama">
+            <button type="submit" class="btn btn-primary">Ara</button>
+          </div>
+          <div class="filters">
+            <label class="check"><input type="radio" name="sr-mode" value="and" checked> Tüm kelimeler (VE)</label>
+            <label class="check"><input type="radio" name="sr-mode" value="or"> Herhangi biri (VEYA)</label>
+            <select id="sr-type" aria-label="Sözleşme tipi"><option value="">Tüm tipler</option></select>
+            <input type="text" id="sr-party" placeholder="Taraf" aria-label="Taraf">
+            <label class="check">Başlangıç <input type="date" id="sr-from"></label>
+            <label class="check">Bitiş <input type="date" id="sr-to"></label>
+            <label class="check"><input type="checkbox" id="sr-active"> Sadece yürürlükte</label>
+          </div>
+          <p class="muted small">Büyük/küçük harf ve Türkçe karakter farkı önemsizdir (sozlesme = SÖZLEŞME). Tek kelimeler ekli halleriyle de eşleşir (sözleşme → sözleşmenin).</p>
+        </form>
+        <p class="muted" id="sr-summary"></p>
+        <div id="sr-results" class="results"></div>
+        <button type="button" class="btn btn-secondary hidden" id="sr-more">Daha fazla göster</button>
       </section>
 
       <section class="view" id="view-sozlesmeler" data-title="Sözleşmeler">

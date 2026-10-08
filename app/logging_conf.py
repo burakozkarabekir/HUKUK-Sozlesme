@@ -104,7 +104,7 @@ def setup_logging(settings: Settings) -> None:
     access.handlers.clear()
     access.propagate = False
     # Third-party HTTP clients are noisy at INFO and may print URLs with tokens.
-    for name in ("httpx", "httpcore", "openai"):
+    for name in ("httpx", "httpx2", "httpcore", "openai"):
         logging.getLogger(name).setLevel(logging.WARNING)
 
 

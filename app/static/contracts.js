@@ -83,6 +83,7 @@
           el("a", { href: "#sozlesmeler", class: "btn btn-secondary btn-sm" }, "← Listeye dön"),
           el("h3", {}, `${c.contract_no || c.contract_id} — ${c.title || ""}`),
           statusBadge(c),
+          el("a", { href: `#sohbet/${encodeURIComponent(c.contract_id)}`, class: "btn btn-primary btn-sm" }, "💬 Bu sözleşmede sor"),
         ),
         el("dl", { class: "kv card" },
           el("dt", {}, "Taraflar"), el("dd", {}, (c.parties || []).join(", ") || "—"),

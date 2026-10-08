@@ -12,3 +12,5 @@ httpx2==2.13.1
 # PDF text extraction (pypdf primary, pdfplumber fallback).
 pypdf==6.19.0
 pdfplumber==0.11.10
+# Optional vector search (cosine similarity).
+numpy==2.5.3

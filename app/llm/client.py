@@ -180,9 +180,11 @@ class LLMClient:
         settings: Settings,
         responses_api: Any | None = None,
         usage_recorder: UsageRecorder | None = None,
+        embeddings_api: Any | None = None,
     ) -> None:
         self.settings = settings
         self._responses = responses_api
+        self._embeddings = embeddings_api
         self._client: openai.AsyncOpenAI | None = None
         self._usage_recorder = usage_recorder
         self._semaphore: asyncio.Semaphore | None = None
@@ -223,6 +225,27 @@ class LLMClient:
             self._responses = self._client.responses
         return self._responses
 
+    async def embed(
+        self, texts: list[str], *, purpose: str = "embedding", user: str | None = None
+    ) -> list[list[float]]:
+        """Embeddings with EMBEDDING_MODEL (only used when vector search is enabled)."""
+        if self._embeddings is None:
+            self._api()
+            if self._client is None:  # tests inject responses_api only
+                raise LLMError("llm_not_configured", "Embedding servisi yapılandırılmamış.", 503)
+            self._embeddings = self._client.embeddings
+        started = time.perf_counter()
+        try:
+            async with self._sem():
+                response = await self._embeddings.create(model=self.settings.EMBEDDING_MODEL, input=texts)
+        except openai.OpenAIError as exc:
+            raise map_openai_error(exc) from exc
+        usage = getattr(response, "usage", None)
+        tokens = int(getattr(usage, "total_tokens", 0) or getattr(usage, "prompt_tokens", 0) or 0)
+        result = LLMResult(text="", usage=Usage(tokens, 0, tokens), latency_ms=(time.perf_counter() - started) * 1000)
+        await self._finish(purpose, user, result, model=self.settings.EMBEDDING_MODEL)
+        return [item.embedding for item in sorted(response.data, key=lambda d: d.index)]
+
     def _sem(self) -> asyncio.Semaphore:
         # VARSAYIM: The limit is per process; with 2 uvicorn workers the effective
         # maximum is 2 x LLM_MAX_CONCURRENCY.
@@ -249,12 +272,13 @@ class LLMClient:
         kwargs.update(extra)
         return kwargs
 
-    async def _finish(self, purpose: str, user: str | None, result: LLMResult) -> None:
+    async def _finish(self, purpose: str, user: str | None, result: LLMResult, model: str | None = None) -> None:
+        model = model or self.model
         logger.info(
             "llm_call",
             extra={
                 "purpose": purpose,
-                "model": self.model,
+                "model": model,
                 "input_tokens": result.usage.input_tokens,
                 "output_tokens": result.usage.output_tokens,
                 "total_tokens": result.usage.total_tokens,
@@ -265,7 +289,7 @@ class LLMClient:
         )
         if self._usage_recorder is not None:
             try:
-                await self._usage_recorder(self.model, purpose, user, result.usage)
+                await self._usage_recorder(model, purpose, user, result.usage)
             except Exception:
                 logger.exception("llm_usage_record_failed")
 

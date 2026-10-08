@@ -333,6 +333,51 @@ input:focus, select:focus, textarea.input:focus { outline: 2px solid var(--navy-
 }
 mark { background: #ffe58a; color: inherit; padding: 0 1px; border-radius: 2px; }
 
+/* --- Chat sources & citations --- */
+.cite {
+  font: inherit;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1;
+  vertical-align: super;
+  padding: 2px 5px;
+  margin: 0 1px;
+  border: 0;
+  border-radius: 8px;
+  background: var(--navy);
+  color: #fff;
+  cursor: pointer;
+}
+.cite:hover { background: var(--navy-dark); }
+.msg-sources { display: flex; flex-direction: column; gap: 6px; margin-top: 8px; }
+.msg-sources-title { font-size: 12.5px; color: var(--muted); font-weight: 600; }
+.source-card {
+  font: inherit;
+  font-size: 13.5px;
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+  text-align: left;
+  padding: 7px 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: #fff;
+  cursor: pointer;
+}
+.source-card:hover { border-color: var(--navy); background: var(--navy-light); }
+.source-n { flex: none; font-size: 11px; font-weight: 700; color: #fff; background: var(--navy); border-radius: 8px; padding: 1px 6px; }
+.chat-scope { display: flex; align-items: center; gap: 8px; font-size: 14px; }
+.chat-scope select { flex: 1; max-width: 600px; }
+
+/* --- Search --- */
+.search-form .row input[type="search"] { flex: 1; font-size: 15px; padding: 9px 12px; }
+.results { display: flex; flex-direction: column; gap: 10px; margin-bottom: 12px; }
+.result { border: 1px solid var(--border); border-radius: 8px; padding: 12px 14px; }
+.result-head { display: flex; flex-wrap: wrap; gap: 4px; align-items: baseline; }
+.result-head a { color: var(--navy); }
+.result-ref { margin-top: 4px; font-size: 14px; }
+.snippet { margin: 8px 0; font-size: 14px; line-height: 1.55; }
+
 /* --- Footer disclaimer --- */
 .disclaimer {
   position: fixed;

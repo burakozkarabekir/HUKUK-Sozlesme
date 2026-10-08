@@ -3,12 +3,26 @@
  * Builds DOM nodes with createElement/textContent only - never innerHTML - so
  * model output cannot inject markup. Supported: headings, paragraphs, line
  * breaks, **bold**, *italic*, `code`, ``` code blocks, bullet / numbered lists
- * (flat) and pipe tables. Links are rendered as plain text on purpose.
+ * (flat), pipe tables and [n] source citations. Links are rendered as plain text on purpose.
  */
 "use strict";
 
 const Markdown = (() => {
-  const INLINE_RE = /(\*\*[^*\n]+\*\*|__[^_\n]+__|`[^`\n]+`|\*[^*\s\n][^*\n]*\*)/g;
+  const INLINE_RE = /(\*\*[^*\n]+\*\*|__[^_\n]+__|`[^`\n]+`|\*[^*\s\n][^*\n]*\*|\[\d{1,2}\])/g;
+  let citationHandler = null;
+
+  function citation(token) {
+    const number = Number(token.slice(1, -1));
+    if (!citationHandler) return document.createTextNode(token);
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "cite";
+    button.textContent = String(number);
+    button.title = `Kaynak ${number}`;
+    const handler = citationHandler; // captured: the module variable is reset after render()
+    button.addEventListener("click", () => handler(number));
+    return button;
+  }
 
   function inline(text) {
     const fragment = document.createDocumentFragment();
@@ -17,7 +31,9 @@ const Markdown = (() => {
       if (match.index > last) fragment.append(text.slice(last, match.index));
       const token = match[0];
       let node;
-      if (token.startsWith("**") || token.startsWith("__")) {
+      if (/^\[\d+\]$/.test(token)) {
+        node = citation(token);
+      } else if (token.startsWith("**") || token.startsWith("__")) {
         node = document.createElement("strong");
         node.textContent = token.slice(2, -2);
       } else if (token.startsWith("`")) {
@@ -71,7 +87,9 @@ const Markdown = (() => {
     return wrapper;
   }
 
-  function render(source) {
+  /** Render markdown. `options.onCitation(n)` turns "[n]" into clickable buttons. */
+  function render(source, options = {}) {
+    citationHandler = options.onCitation || null;
     const root = document.createDocumentFragment();
     const lines = String(source || "").replace(/\r\n?/g, "\n").split("\n");
     let i = 0;
@@ -153,6 +171,7 @@ const Markdown = (() => {
       i += 1;
     }
     flushParagraph();
+    citationHandler = null;
     return root;
   }
 
