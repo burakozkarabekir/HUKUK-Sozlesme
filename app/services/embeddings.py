@@ -77,10 +77,12 @@ def vector_ranked_ids(
     if not rows:
         return []
     query = np.asarray(query_vector, dtype=np.float32)
-    matrix = np.stack([np.frombuffer(r["vector"], dtype=np.float32) for r in rows if len(r["vector"]) == query.nbytes])
-    ids = [r["chunk_id"] for r in rows if len(r["vector"]) == query.nbytes]
-    if not ids:
+    # Vectors of another dimension (e.g. after switching EMBEDDING_MODEL) are ignored.
+    usable = [r for r in rows if len(r["vector"]) == query.nbytes]
+    if not usable:
         return []
+    matrix = np.stack([np.frombuffer(r["vector"], dtype=np.float32) for r in usable])
+    ids = [r["chunk_id"] for r in usable]
     norms = np.linalg.norm(matrix, axis=1) * (np.linalg.norm(query) or 1.0)
     scores = matrix @ query / np.where(norms == 0, 1.0, norms)
     order = np.argsort(-scores)[:limit]

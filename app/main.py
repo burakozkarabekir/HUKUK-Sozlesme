@@ -7,6 +7,7 @@ so it works both at `http://127.0.0.1:8001/sozlesme/` and behind the proxy.
 from __future__ import annotations
 
 import logging
+import sqlite3
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
@@ -44,6 +45,8 @@ def init_storage(settings: Settings) -> None:
     """Create data dirs and apply DB migrations (idempotent, multi-worker safe)."""
     if not check_fts5():
         raise RuntimeError("SQLite FTS5 desteği bulunamadı. Python/SQLite kurulumunu kontrol edin.")
+    if sqlite3.sqlite_version_info < (3, 35):  # UPDATE ... RETURNING (job queue)
+        raise RuntimeError(f"SQLite 3.35+ gerekli (mevcut: {sqlite3.sqlite_version}).")
     settings.DATA_DIR.mkdir(parents=True, exist_ok=True)
     conn = connect(settings.db_path)
     try:

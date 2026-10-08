@@ -5,3 +5,5 @@ ruff==0.16.10
 reportlab==5.0.1
 # Mock HTTP for the Turkuaz client tests.
 respx==0.23.1
+# Coverage report (pytest --cov=app)
+pytest-cov==7.1.0
