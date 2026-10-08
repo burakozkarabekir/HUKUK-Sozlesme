@@ -25,3 +25,6 @@ Thumbs.db
 # Contract PDFs must never be committed
 sample_contracts/*
 !sample_contracts/.gitkeep
+
+# Offline pip packages (deploy/setup.sh WHEELHOUSE)
+wheels/

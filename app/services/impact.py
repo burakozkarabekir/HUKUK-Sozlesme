@@ -194,6 +194,8 @@ def normalize_for_match(text: str) -> str:
     return _NON_WORD_RE.sub(" ", fold(text)).strip()
 
 
+# VARSAYIM: A quote counts as verified when its words (ignoring case, Turkish characters
+# and punctuation) appear in that order in one candidate clause; "..." may skip text.
 def verify_quote(quote: str, chunks: list[dict[str, Any]], preferred: int | None = None) -> dict[str, Any] | None:
     """Return the chunk that really contains `quote` (case/diacritic/punctuation-insensitive).
 

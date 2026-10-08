@@ -9,6 +9,8 @@ Usage:
     python cli.py check-llm        # LLM connectivity + supported features
     python cli.py check-turkuaz    # Turkuaz connectivity + raw field names [--out x.json]
     python cli.py hash-password    # bcrypt hash for BASIC_AUTH_USERS
+    python cli.py demo-data        # sample contract PDFs for local testing
+    python cli.py backup [--out f] # consistent online DB backup
 """
 
 from __future__ import annotations
@@ -19,6 +21,7 @@ import json
 import sys
 import time
 from collections.abc import Awaitable, Callable
+from pathlib import Path
 
 from app.config import Settings, apply_network_env, get_settings
 from app.db import connect, current_version, migrate, table_counts
@@ -331,6 +334,43 @@ def cmd_hash_password(_: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_backup(args: argparse.Namespace) -> int:
+    """Consistent online copy of the database (safe while the app is running)."""
+    import sqlite3
+    from datetime import datetime
+
+    settings = get_settings()
+    target = Path(args.out) if args.out else settings.DATA_DIR / "backups" / f"app-{datetime.now():%Y%m%d-%H%M%S}.db"
+    target.parent.mkdir(parents=True, exist_ok=True)
+    source = connect(settings.db_path)
+    try:
+        destination = sqlite3.connect(target)
+        with destination:
+            source.backup(destination)
+        destination.close()
+    finally:
+        source.close()
+    print(f"Yedek alındı: {target}")
+    print(f"Not: PDF dosyaları ayrıca yedeklenmeli: {settings.DATA_DIR / 'files'}")
+    return 0
+
+
+def cmd_demo_data(args: argparse.Namespace) -> int:
+    settings = get_settings()
+    target = Path(args.dir) if args.dir else settings.LOCAL_CONTRACTS_DIR
+    try:
+        from app.demo import write_demo_contracts
+
+        created = write_demo_contracts(target)
+    except ImportError:
+        print("reportlab gerekli: pip install -r requirements-dev.txt", file=sys.stderr)
+        return 2
+    print(f"{len(created)} örnek PDF oluşturuldu: {target}")
+    print("Örnek mevzuat metni: ornek_mevzuat_degisikligi.txt")
+    print("Sonraki adım: python cli.py sync")
+    return 0
+
+
 def cmd_check_turkuaz(args: argparse.Namespace) -> int:
     settings = get_settings()
     apply_network_env(settings)
@@ -355,6 +395,12 @@ def build_parser() -> argparse.ArgumentParser:
     sub.add_parser("check-llm", help="LLM bağlantısını ve desteklenen yöntemleri test et").set_defaults(
         func=cmd_check_llm
     )
+    backup = sub.add_parser("backup", help="Veritabanının tutarlı yedeğini al (uygulama çalışırken de güvenli)")
+    backup.add_argument("--out", help="Yedek dosyası (varsayılan: data/backups/app-TARIH.db)")
+    backup.set_defaults(func=cmd_backup)
+    demo = sub.add_parser("demo-data", help="Yerel deneme için örnek sözleşme PDF'leri üret (reportlab gerekir)")
+    demo.add_argument("--dir", help="Hedef klasör (varsayılan: LOCAL_CONTRACTS_DIR)")
+    demo.set_defaults(func=cmd_demo_data)
     sub.add_parser("hash-password", help="AUTH_MODE=basic için bcrypt şifre özeti üret").set_defaults(
         func=cmd_hash_password
     )

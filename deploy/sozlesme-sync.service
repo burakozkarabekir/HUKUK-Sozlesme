@@ -1,0 +1,22 @@
+# /etc/systemd/system/sozlesme-sync.service  (sozlesme-sync.timer tarafından tetiklenir)
+# Elle çalıştırmak için: sudo systemctl start sozlesme-sync
+[Unit]
+Description=Sözleşme senkronizasyonu (kaynak -> PDF -> indeks)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=dtpamcxaiteam
+WorkingDirectory=/opt/apps/sozlesme
+EnvironmentFile=/opt/apps/sozlesme/.env
+ExecStart=/opt/apps/sozlesme/venv/bin/python cli.py sync --trigger timer
+# Exit code 3 = başka bir senkronizasyon zaten çalışıyor (hata sayılmaz).
+SuccessExitStatus=3
+TimeoutStartSec=4h
+Nice=10
+IOSchedulingClass=idle
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+UMask=0027

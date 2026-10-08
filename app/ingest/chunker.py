@@ -178,6 +178,8 @@ def _sections(lines: list[_Line], file_label: str | None) -> list[_Section]:
     parsed = [parse_heading(line.text) for line in lines]
     mode = _choose_mode(parsed)
     sections: list[_Section] = []
+    # VARSAYIM: Text before the first heading (title, recitals) is labelled "Giriş".
+    # Repeated page headers/footers are not removed.
     current = _Section(ref=file_label or "Giriş", title=None, lines=[])
     ek_prefix: str | None = None
     for index, (line, heading) in enumerate(zip(lines, parsed, strict=True)):

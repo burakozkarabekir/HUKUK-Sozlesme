@@ -32,6 +32,9 @@ _PHRASE_RE = re.compile(r'"([^"]+)"')
 MAX_SNIPPET_CHARS = 320
 
 
+# VARSAYIM: Single words of 3+ letters are prefix-matched (Turkish suffixes); vowel
+# changes in stems (fesih -> feshi) are not handled - the impact analysis asks the
+# LLM for such variants as extra keywords.
 @dataclass(frozen=True)
 class Term:
     tokens: tuple[str, ...]

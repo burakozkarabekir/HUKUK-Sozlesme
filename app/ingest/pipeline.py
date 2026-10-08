@@ -290,6 +290,9 @@ def sync_contract(
     return "updated" if changed else "unchanged"
 
 
+# VARSAYIM: The incremental watermark only advances after a fully successful run, so
+# contracts that failed are listed again next time. Contracts are deleted only by a
+# full sync (`--full`): an incremental listing cannot tell "deleted" from "unchanged".
 def last_success_start(conn: sqlite3.Connection) -> str | None:
     row = conn.execute("SELECT started_at FROM sync_runs WHERE status = 'success' ORDER BY id DESC LIMIT 1").fetchone()
     return row["started_at"] if row else None

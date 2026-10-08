@@ -1,0 +1,16 @@
+# /etc/systemd/system/sozlesme-sync.timer
+# Kurulum: sudo systemctl enable --now sozlesme-sync.timer
+# Kontrol: systemctl list-timers sozlesme-sync.timer
+[Unit]
+Description=Her gece 02:00'de sözleşme senkronizasyonu
+
+[Timer]
+# Sunucunun yerel saatiyle (timedatectl ile kontrol edin).
+OnCalendar=*-*-* 02:00:00
+# Sunucu 02:00'de kapalıysa açılışta kaçırılan çalıştırmayı yapar.
+Persistent=true
+RandomizedDelaySec=5min
+Unit=sozlesme-sync.service
+
+[Install]
+WantedBy=timers.target

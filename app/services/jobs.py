@@ -21,6 +21,8 @@ from app.services.impact import run_job
 
 logger = logging.getLogger(__name__)
 
+# VARSAYIM: A running job without a heartbeat for 5 minutes belongs to a dead worker;
+# it is re-queued and runs from scratch, at most twice in total.
 JOB_STALE_SECONDS = 300
 HEARTBEAT_SECONDS = 20
 MAX_ATTEMPTS = 2

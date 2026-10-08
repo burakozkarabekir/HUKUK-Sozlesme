@@ -45,13 +45,21 @@ const Core = (() => {
     if (status === 401 && state.me && state.me.auth_mode === "entra") location.href = "auth/login";
   }
 
+  // Messages for errors produced by nginx (HTML pages, no JSON body).
+  const GATEWAY_MESSAGES = {
+    413: "Gönderilen dosya çok büyük.",
+    502: "Uygulama sunucusuna ulaşılamadı (502). Servis yeniden başlatılıyor olabilir; biraz sonra tekrar deneyin.",
+    503: "Servis şu anda kullanılamıyor (503). Biraz sonra tekrar deneyin.",
+    504: "Sunucu zamanında yanıt vermedi (504). İşlem uzun sürmüş olabilir; tekrar deneyin.",
+  };
+
   async function errorFrom(response) {
     const data = await response.json().catch(() => null);
     const error = data && data.error;
     handleUnauthenticated(response.status);
     return new ApiError(
       (error && error.code) || "http_error",
-      (error && error.message) || `İstek başarısız oldu (HTTP ${response.status}).`,
+      (error && error.message) || GATEWAY_MESSAGES[response.status] || `İstek başarısız oldu (HTTP ${response.status}).`,
       response.status,
     );
   }

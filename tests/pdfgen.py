@@ -6,56 +6,17 @@ Arial on Windows); otherwise Helvetica with Turkish letters folded to ASCII.
 
 from __future__ import annotations
 
-import io
 from pathlib import Path
 
-from reportlab.lib.pagesizes import A4
-from reportlab.pdfbase import pdfmetrics
-from reportlab.pdfbase.ttfonts import TTFont
-from reportlab.pdfgen import canvas
-
-_FONT_CANDIDATES = [
-    "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
-    "/usr/share/fonts/dejavu/DejaVuSans.ttf",
-    "/Library/Fonts/Arial Unicode.ttf",
-    "C:/Windows/Fonts/arial.ttf",
-]
-_ASCII = str.maketrans("şŞğĞıİüÜöÖçÇ", "sSgGiIuUoOcC")
-
-
-def _font() -> tuple[str, bool]:
-    for path in _FONT_CANDIDATES:
-        if Path(path).is_file():
-            if "TestSans" not in pdfmetrics.getRegisteredFontNames():
-                pdfmetrics.registerFont(TTFont("TestSans", path))
-            return "TestSans", True
-    return "Helvetica", False
-
+from app.demo import _font, make_pdf
 
 FONT_NAME, TURKISH_GLYPHS = _font()
+_ASCII = str.maketrans("şŞğĞıİüÜöÖçÇ", "sSgGiIuUoOcC")
 
 
 def tr(text: str) -> str:
     """Text as it will appear in the generated PDF (ASCII-folded without a TR font)."""
     return text if TURKISH_GLYPHS else text.translate(_ASCII)
-
-
-def make_pdf(pages: list[str]) -> bytes:
-    """One string per page; '\\n' separates lines. An empty string = blank (scanned-like) page."""
-    buffer = io.BytesIO()
-    pdf = canvas.Canvas(buffer, pagesize=A4)
-    _, height = A4
-    for page in pages:
-        y = height - 60
-        pdf.setFont(FONT_NAME, 10)
-        if not page:
-            pdf.rect(50, 50, 400, 600)  # drawing only, no text
-        for line in page.split("\n"):
-            pdf.drawString(50, y, tr(line))
-            y -= 14
-        pdf.showPage()
-    pdf.save()
-    return buffer.getvalue()
 
 
 BAYILIK_PAGES = [

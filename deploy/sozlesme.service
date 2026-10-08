@@ -1,0 +1,32 @@
+# /etc/systemd/system/sozlesme.service
+# Kurulum: sudo cp deploy/sozlesme.service /etc/systemd/system/ && sudo systemctl daemon-reload
+#          sudo systemctl enable --now sozlesme
+[Unit]
+Description=Sözleşme Mevzuat Etki Analizi (FastAPI / uvicorn)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=dtpamcxaiteam
+WorkingDirectory=/opt/apps/sozlesme
+EnvironmentFile=/opt/apps/sozlesme/.env
+# 127.0.0.1 üzerinde dinler; dışarıya nginx /sozlesme yolu ile açar.
+# --proxy-headers: X-Forwarded-For / X-Forwarded-Proto yalnızca nginx'ten (127.0.0.1) kabul edilir.
+# Arka plan işleri (analiz kuyruğu, senkronizasyon) DB kilidi ile iki worker'da çakışmadan çalışır.
+ExecStart=/opt/apps/sozlesme/venv/bin/uvicorn app.main:app --host 127.0.0.1 --port 8001 --root-path /sozlesme --workers 2 --proxy-headers --forwarded-allow-ips 127.0.0.1 --timeout-graceful-shutdown 30 --no-server-header
+Restart=always
+RestartSec=5
+TimeoutStopSec=45
+
+# Sertleştirme
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ProtectKernelTunables=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+UMask=0027
+
+[Install]
+WantedBy=multi-user.target
