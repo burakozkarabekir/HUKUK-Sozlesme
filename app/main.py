@@ -16,7 +16,15 @@ from fastapi.staticfiles import StaticFiles
 from starlette.requests import Request
 
 from app import __version__
-from app.api import routes_admin, routes_chat, routes_contracts, routes_health, routes_me, routes_search
+from app.api import (
+    routes_admin,
+    routes_chat,
+    routes_contracts,
+    routes_health,
+    routes_impact,
+    routes_me,
+    routes_search,
+)
 from app.config import BASE_DIR, Settings, apply_network_env, get_settings
 from app.db import check_fts5, connect, migrate
 from app.errors import register_error_handlers
@@ -24,6 +32,7 @@ from app.llm.client import LLMClient
 from app.llm.usage import make_db_usage_recorder
 from app.logging_conf import setup_logging
 from app.middleware import RequestContextMiddleware
+from app.services.jobs import JobRunner
 
 STATIC_DIR = BASE_DIR / "app" / "static"
 logger = logging.getLogger(__name__)
@@ -51,11 +60,14 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     @asynccontextmanager
     async def lifespan(_: FastAPI) -> AsyncIterator[None]:
         init_storage(settings)
+        app.state.job_runner = JobRunner(settings, app.state.llm)
+        app.state.job_runner.start()
         logger.info(
             "app_started",
             extra={"env": settings.APP_ENV, "auth_mode": settings.AUTH_MODE, "version": __version__},
         )
         yield
+        await app.state.job_runner.stop()
         await app.state.llm.aclose()
         logger.info("app_stopped")
 
@@ -82,6 +94,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(routes_chat.router)
     app.include_router(routes_contracts.router)
     app.include_router(routes_search.router)
+    app.include_router(routes_impact.router)
     app.include_router(routes_admin.router)
 
     app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")

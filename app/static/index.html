@@ -11,6 +11,7 @@
   <script src="static/core.js" defer></script>
   <script src="static/chat.js" defer></script>
   <script src="static/search.js" defer></script>
+  <script src="static/impact.js" defer></script>
   <script src="static/contracts.js" defer></script>
   <script src="static/admin.js" defer></script>
   <script src="static/app.js" defer></script>
@@ -61,9 +62,114 @@
       </section>
 
       <section class="view" id="view-etki" data-title="Mevzuat Etki Analizi">
-        <h2>⚖️ Mevzuat Etki Analizi</h2>
-        <p class="muted">Mevzuat değişikliği metnini yapıştırın veya PDF yükleyin; etkilenen sözleşme ve maddeleri gerekçesiyle listeleyin.</p>
-        <div class="placeholder">Bu ekran Faz 5'te etkinleşecek.</div>
+        <div class="view-header">
+          <h2>⚖️ Mevzuat Etki Analizi</h2>
+          <button type="button" class="btn btn-secondary btn-sm" id="im-new">＋ Yeni analiz</button>
+        </div>
+        <ol class="steps" id="im-steps">
+          <li data-step="1" class="active">Mevzuat</li>
+          <li data-step="2">Anahtar kelimeler</li>
+          <li data-step="3">Analiz</li>
+          <li data-step="4">Sonuçlar</li>
+        </ol>
+
+        <div class="card" id="im-step1">
+          <label class="field">Analiz başlığı (opsiyonel)
+            <input type="text" id="im-title" maxlength="200" placeholder="ör. 7654 sayılı Kanun – fesih süreleri">
+          </label>
+          <label class="field">Mevzuat değişikliği metni
+            <textarea id="im-text" class="input" rows="10" placeholder="Mevzuat değişikliği metnini buraya yapıştırın veya PDF yükleyin…"></textarea>
+          </label>
+          <div class="row">
+            <label class="btn btn-secondary btn-sm file-btn">📎 PDF yükle
+              <input type="file" id="im-file" accept="application/pdf,.pdf" class="offscreen">
+            </label>
+            <span id="im-file-name" class="muted small"></span>
+            <span class="spacer"></span>
+            <span class="muted small" id="im-chars"></span>
+          </div>
+          <h4>Sözleşme filtreleri (opsiyonel)</h4>
+          <div class="filters">
+            <select id="im-type" aria-label="Sözleşme tipi"><option value="">Tüm tipler</option></select>
+            <input type="text" id="im-party" placeholder="Taraf" aria-label="Taraf">
+            <label class="check">Başlangıç <input type="date" id="im-from"></label>
+            <label class="check">Bitiş <input type="date" id="im-to"></label>
+            <label class="check"><input type="checkbox" id="im-active"> Sadece yürürlükteki sözleşmeler</label>
+          </div>
+          <button type="button" class="btn btn-primary" id="im-extract">Kavramları Çıkar</button>
+        </div>
+
+        <div class="card hidden" id="im-step2">
+          <h3>Değişikliğin özeti</h3>
+          <p id="im-summary"></p>
+          <dl class="kv">
+            <dt>Etkilenen konular</dt><dd><div class="chips" id="im-topics"></div></dd>
+            <dt>İlgili sözleşme tipleri</dt><dd><div class="chips" id="im-types"></div></dd>
+            <dt>Yürürlük</dt><dd id="im-effective"></dd>
+          </dl>
+          <h4>Anahtar kelimeler <span class="muted" id="im-kw-count"></span></h4>
+          <p class="muted small">Sözleşme maddelerinde bu kelimeler aranır; bulunan maddeler yapay zeka ile değerlendirilir. Kelime ekleyip çıkarabilirsiniz (virgülle birden fazla eklenebilir).</p>
+          <div class="chips" id="im-chips"></div>
+          <div class="row">
+            <input type="text" id="im-chip-input" placeholder="Kelime ekleyin ve Enter'a basın" aria-label="Anahtar kelime ekle">
+            <button type="button" class="btn btn-secondary btn-sm" id="im-chip-add">Ekle</button>
+          </div>
+          <div class="row actions">
+            <button type="button" class="btn btn-secondary" id="im-back">← Geri</button>
+            <button type="button" class="btn btn-primary" id="im-run">Analizi Başlat</button>
+          </div>
+        </div>
+
+        <div class="card hidden" id="im-step3">
+          <h3 id="im-job-title"></h3>
+          <div class="progress"><div class="progress-bar" id="im-bar"></div></div>
+          <p id="im-progress-text" class="muted"></p>
+          <p class="muted small">Analiz arka planda çalışır; bu sayfadan ayrılabilir, sonuca daha sonra "Geçmiş analizler"den ulaşabilirsiniz.</p>
+          <button type="button" class="btn btn-danger" id="im-cancel">İptal Et</button>
+        </div>
+
+        <div class="hidden" id="im-step4">
+          <div class="card">
+            <div class="detail-header">
+              <h3 id="im-res-title"></h3>
+              <a class="btn btn-primary btn-sm" id="im-export" href="#">⬇ Excel İndir</a>
+            </div>
+            <p class="muted small" id="im-res-meta"></p>
+            <div id="im-res-notice" class="hidden"></div>
+            <div class="counts" id="im-counts"></div>
+            <p id="im-res-summary"></p>
+            <div class="chips" id="im-res-keywords"></div>
+          </div>
+          <div class="filters">
+            <span id="im-level-filter" class="row">
+              <label class="check"><input type="checkbox" value="ETKILENIR" checked> Etkilenir</label>
+              <label class="check"><input type="checkbox" value="MUHTEMELEN_ETKILENIR" checked> Muhtemelen</label>
+              <label class="check"><input type="checkbox" value="ETKILENMEZ"> Etkilenmez</label>
+              <label class="check"><input type="checkbox" value="DEGERLENDIRILEMEDI" checked> Değerlendirilemedi</label>
+            </span>
+            <input type="search" id="im-res-q" placeholder="Sonuçlarda ara…" aria-label="Sonuçlarda ara">
+            <label class="check"><input type="checkbox" id="im-unverified"> Sadece ⚠️ doğrulanamayan</label>
+            <select id="im-sort" aria-label="Sıralama">
+              <option value="level">Etki seviyesine göre</option>
+              <option value="confidence">Güven skoruna göre</option>
+              <option value="contract">Sözleşme no'ya göre</option>
+            </select>
+          </div>
+          <div class="table-wrap">
+            <table class="table">
+              <thead><tr><th></th><th>Etki</th><th>Sözleşme No</th><th>Taraflar</th><th>Madde</th><th>Gerekçe</th><th>Güven</th></tr></thead>
+              <tbody id="im-rows"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="card">
+          <h3>Geçmiş analizler</h3>
+          <div class="table-wrap"><table class="table">
+            <thead><tr><th>Tarih</th><th>Başlık</th><th>Oluşturan</th><th>Durum</th><th>Etkilenir / Muhtemelen</th><th>Sözleşme</th></tr></thead>
+            <tbody id="im-history"></tbody>
+          </table></div>
+        </div>
       </section>
 
       <section class="view" id="view-arama" data-title="Keyword Arama">

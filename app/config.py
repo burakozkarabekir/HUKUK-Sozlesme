@@ -112,6 +112,15 @@ class Settings(BaseSettings):
     # VARSAYIM: Needed to sign session cookies (basic/entra). Empty -> random per process.
     SESSION_SECRET_KEY: SecretStr = SecretStr("")
 
+    # --- Impact analysis ---
+    # VARSAYIM: Defaults for candidate selection and background jobs.
+    IMPACT_CHUNKS_PER_CONTRACT: int = Field(default=6, ge=1, le=30)
+    IMPACT_MAX_CONTRACTS: int = Field(default=200, ge=1)
+    # Max characters of the legislation text sent to the model per call.
+    IMPACT_LEGISLATION_PROMPT_CHARS: int = Field(default=20_000, ge=1000)
+    IMPACT_MAX_PARALLEL_JOBS: int = Field(default=1, ge=1, le=4)
+    JOB_POLL_SECONDS: float = Field(default=2.0, gt=0)
+
     # --- Limits ---
     # VARSAYIM: Default limits; spec asks for "reasonable" values.
     MAX_LEGISLATION_CHARS: int = Field(default=200_000, gt=0)

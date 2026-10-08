@@ -75,3 +75,18 @@ def stream(*deltas: str, input_tokens: int = 7, output_tokens: int = 3) -> FakeS
         input_tokens=input_tokens, output_tokens=output_tokens, total_tokens=input_tokens + output_tokens
     )
     return FakeStream(list(deltas), usage)
+
+
+class RuleResponses:
+    """Fake whose answer is computed from the request (for concurrent calls)."""
+
+    def __init__(self, responder) -> None:  # responder(kwargs) -> response | Exception
+        self.responder = responder
+        self.calls: list[dict[str, Any]] = []
+
+    async def create(self, **kwargs: Any) -> Any:
+        self.calls.append(kwargs)
+        outcome = self.responder(kwargs)
+        if isinstance(outcome, Exception):
+            raise outcome
+        return outcome

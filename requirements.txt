@@ -14,3 +14,5 @@ pypdf==6.19.0
 pdfplumber==0.11.10
 # Optional vector search (cosine similarity).
 numpy==2.5.3
+# Excel export.
+openpyxl==3.1.5

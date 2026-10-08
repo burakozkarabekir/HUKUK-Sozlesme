@@ -103,3 +103,46 @@ def wrap_document(text: str, tag: str = "sozlesme_metni", **attrs: str | int | N
         f' {key}="{str(value).replace(chr(34), chr(39))}"' for key, value in attrs.items() if value is not None
     )
     return f"<{tag}{rendered}>\n{_escape_closing_tag(text, tag)}\n</{tag}>"
+
+
+IMPACT_EXTRACT = (
+    BASE_RULES
+    + """
+Görevin: <mevzuat_metni> içindeki mevzuat değişikliğini analiz edip sözleşme arşivinde
+arama yapılabilecek kavramları çıkarmak.
+
+- summary: Değişikliğin ne getirdiğini 3-5 cümleyle, somut yükümlülük ve sürelerle özetle.
+- topics: Etkilenen hukuki konular (ör. "fesih bildirim süresi", "kişisel verilerin korunması").
+- keywords: Sözleşme maddelerinde geçmesi muhtemel 10-25 Türkçe anahtar kelime veya kısa ifade.
+  Eş anlamlıları ve ekli/kök varyantlarını da ekle (ör. "fesih", "feshi", "feshedilmesi",
+  "sona erme", "feshi ihbar"). Her biri 1-3 kelime olsun. Genel kelimeler (sözleşme, taraf, madde) ekleme.
+- contract_types: Etkilenmesi muhtemel sözleşme tipleri (ör. "Bayilik Sözleşmesi", "Kira Sözleşmesi").
+- effective_date: Metinde yürürlük tarihi varsa olduğu gibi yaz, yoksa null.
+"""
+)
+
+IMPACT_EVALUATE = (
+    BASE_RULES
+    + """
+Görevin: Bir mevzuat değişikliğinin, verilen sözleşmeyi ve maddelerini etkileyip etkilemediğini değerlendirmek.
+Mevzuat <mevzuat_metni>, sözleşmeden aday maddeler <sozlesme_metni kaynak="N" ...> etiketleriyle verilir.
+Aday maddeler anahtar kelime aramasıyla bulunmuştur; bir kısmı ilgisiz olabilir.
+
+Etki seviyeleri:
+- ETKILENIR: Madde değişiklikle doğrudan çelişiyor, değişiklik nedeniyle geçersizleşiyor veya tadil gerektiriyor.
+- MUHTEMELEN_ETKILENIR: Madde değişiklikle ilgili; uygulamada etkilenebilir, hukuk incelemesi gerekir.
+- ETKILENMEZ: Maddelerin değişiklikle anlamlı bir ilişkisi yok.
+
+Kurallar:
+- affected_clauses içine yalnızca etkilenen (ETKILENIR / MUHTEMELEN_ETKILENIR) maddeleri yaz;
+  ETKILENMEZ ise boş liste ver.
+- source: Maddenin kaynak numarası (kaynak="N"). clause_ref ve page değerlerini kaynağın etiketinden al.
+- quote: Madde metninden BİREBİR kopyalanmış, en fazla 300 karakterlik kısa bir alıntı. Kelimeleri değiştirme,
+  özetleme veya birleştirme. Atlamak gerekirse "..." kullan.
+- reason: Değişikliğin bu maddeyi neden ve nasıl etkilediğini 1-2 cümleyle açıkla.
+- recommended_action: Kısa öneri (ör. "Madde 7.2 tadil edilmeli", "Hukuk incelemesi önerilir", "İşlem gerekmez").
+- summary: Sözleşme için 1-2 cümlelik genel değerlendirme.
+- confidence: Değerlendirmene güvenin (0-1). Bilgi yetersizse düşük ver.
+- contract_id alanına verilen sözleşme kimliğini aynen yaz.
+"""
+)

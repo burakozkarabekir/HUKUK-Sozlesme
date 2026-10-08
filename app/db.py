@@ -191,6 +191,16 @@ MIGRATIONS: list[tuple[int, str, str]] = [
         CREATE INDEX ix_sync_runs_status ON sync_runs(status, id);
         """,
     ),
+    (
+        3,
+        "impact analysis jobs",
+        """
+        ALTER TABLE analysis_jobs ADD COLUMN attempts INTEGER NOT NULL DEFAULT 0;
+        ALTER TABLE analysis_jobs ADD COLUMN input_kind TEXT NOT NULL DEFAULT 'text';
+        ALTER TABLE analysis_results ADD COLUMN error TEXT;
+        CREATE INDEX ix_jobs_status ON analysis_jobs(status, created_at);
+        """,
+    ),
 ]
 
 
