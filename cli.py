@@ -7,13 +7,14 @@ Usage:
     python cli.py reindex          # re-chunk stored PDFs, rebuild FTS
     python cli.py embed            # create missing embeddings (vector search)
     python cli.py check-llm        # LLM connectivity + supported features
-    python cli.py check-turkuaz    # (phase 6)
+    python cli.py check-turkuaz    # Turkuaz connectivity + raw field names [--out x.json]
 """
 
 from __future__ import annotations
 
 import argparse
 import asyncio
+import json
 import sys
 import time
 from collections.abc import Awaitable, Callable
@@ -196,12 +197,125 @@ def cmd_embed(_: argparse.Namespace) -> int:
     return 0
 
 
-def _not_yet(phase: int):
-    def handler(args: argparse.Namespace) -> int:
-        print(f"'{args.command}' komutu Faz {phase}'te eklenecek.", file=sys.stderr)
-        return 2
+def _short(value: object, limit: int = 80) -> str:
+    text = json.dumps(value, ensure_ascii=False, default=str) if not isinstance(value, str) else value
+    if isinstance(value, str) and len(value) > 200 and " " not in value[:200]:
+        return f"<{len(value)} karakterlik veri (base64 olabilir)>"
+    return text if len(text) <= limit else text[: limit - 1] + "…"
 
-    return handler
+
+def _flatten(value: object, prefix: str = "") -> list[tuple[str, object]]:
+    """Field paths in mapping syntax: a.b, items[].name."""
+    rows: list[tuple[str, object]] = []
+    if isinstance(value, dict):
+        for key, item in value.items():
+            rows.extend(_flatten(item, f"{prefix}.{key}" if prefix else str(key)))
+    elif isinstance(value, list) and value and isinstance(value[0], dict):
+        rows.extend(_flatten(value[0], f"{prefix}[]"))
+    else:
+        rows.append((prefix, value))
+    return rows
+
+
+def _truncate_blobs(value: object) -> object:
+    if isinstance(value, dict):
+        return {k: _truncate_blobs(v) for k, v in value.items()}
+    if isinstance(value, list):
+        return [_truncate_blobs(v) for v in value]
+    if isinstance(value, str) and len(value) > 300:
+        return value[:60] + f"… <{len(value)} karakter>"
+    return value
+
+
+def _print_fields(record: dict) -> None:
+    for path, value in _flatten(record):
+        print(f"    {path:<40} {type(value).__name__:<6} {_short(value)}")
+
+
+def run_check_turkuaz(settings: Settings, source: object | None = None, out: str | None = None) -> int:
+    from app.sources import turkuaz_mapping as mapping
+    from app.sources.base import SourceError
+    from app.sources.turkuaz_source import TurkuazSource, missing_settings
+
+    print("Turkuaz bağlantı kontrolü")
+    print(f"  Base URL   : {settings.TURKUAZ_BASE_URL or '(boş)'}")
+    print(f"  Auth modu  : {settings.TURKUAZ_AUTH_MODE}")
+    print(f"  Proxy      : {settings.HTTPS_PROXY or '(yok)'}   SSL doğrulama: {settings.TURKUAZ_VERIFY_SSL}")
+    print(f"  Liste yolu : {mapping.LIST_PATH}   Sayfalama: {mapping.PAGINATION['style']}")
+    missing = missing_settings(settings)
+    if missing and source is None:
+        print(f"\n❌ Eksik ayarlar: {', '.join(missing)}")
+        return 1
+    dump: dict[str, object] = {}
+    try:
+        turkuaz = source or TurkuazSource(settings)
+        print("\n▶ 1/3 Sözleşme listesi (ilk sayfa)")
+        body, records = turkuaz.raw_first_page(3)  # type: ignore[attr-defined]
+        if isinstance(body, dict):
+            print(f"  Yanıtın üst düzey alanları: {', '.join(body.keys())}")
+        print(f"  Gelen kayıt (ilk {len(records)} gösteriliyor)")
+        dump["list_response_keys"] = list(body.keys()) if isinstance(body, dict) else type(body).__name__
+        dump["records"] = _truncate_blobs(records)
+        if not records:
+            print("  ⚠️  Kayıt yok. PAGINATION['items_path'] doğru mu?")
+            return 1
+        for index, record in enumerate(records, start=1):
+            print(f"\n  Kayıt {index} alanları (eşleştirme yolu / tip / örnek değer):")
+            _print_fields(record)
+
+        print("\n▶ 2/3 Alan eşleştirmesi (turkuaz_mapping.CONTRACT_FIELD_MAP)")
+        first_meta = None
+        for index, record in enumerate(records, start=1):
+            try:
+                meta = mapping.map_contract(record)
+            except ValueError as exc:
+                print(f"  ❌ Kayıt {index} eşleştirilemedi: {str(exc).splitlines()[0]}")
+                continue
+            first_meta = first_meta or meta
+            empty = [f for f, p in mapping.CONTRACT_FIELD_MAP.items() if mapping.get_path(record, p) in (None, "", [])]
+            print(f"  ✅ Kayıt {index}: id={meta.contract_id} no={meta.contract_no} taraflar={meta.parties}")
+            if empty:
+                print(f"     ⚠️  Boş/eşleşmeyen alanlar: {', '.join(empty)}")
+            if meta.extra:
+                print(f"     ℹ️  Eşleştirilmemiş alanlar (extra): {', '.join(meta.extra)}")
+        if first_meta is None:
+            print("  ❌ Hiçbir kayıt eşleştirilemedi; CONTRACT_FIELD_MAP güncellenmeli.")
+            return 1
+
+        print(f"\n▶ 3/3 Dosyalar ({mapping.DOCUMENTS_PATH.format(contract_id=first_meta.contract_id)})")
+        raw_docs = turkuaz.get_json(  # type: ignore[attr-defined]
+            mapping.DOCUMENTS_PATH.format(contract_id=first_meta.contract_id)
+        )
+        items = mapping.get_path(raw_docs, mapping.DOCUMENTS_ITEMS_PATH) if mapping.DOCUMENTS_ITEMS_PATH else raw_docs
+        dump["documents"] = _truncate_blobs(raw_docs)
+        if isinstance(raw_docs, dict):
+            print(f"  Yanıtın üst düzey alanları: {', '.join(raw_docs.keys())}")
+        if not isinstance(items, list) or not items:
+            print("  ⚠️  Dosya listesi bulunamadı. DOCUMENTS_ITEMS_PATH doğru mu?")
+            return 1
+        print("  İlk dosyanın alanları:")
+        _print_fields(items[0])
+        files = turkuaz.get_contract_document(first_meta.contract_id)  # type: ignore[attr-defined]
+        for file in files:
+            size = len(file.read_bytes())
+            kind = "Ek" if file.is_attachment else "Ana"
+            print(f"  ✅ {file.file_name} [{kind}] {size:,} bayt, PDF: {file.read_bytes()[:4] == b'%PDF'}")
+    except SourceError as exc:
+        print(f"\n❌ {exc.message} [{exc.code}]")
+        return 1
+    finally:
+        if out:
+            with open(out, "w", encoding="utf-8") as handle:
+                json.dump(dump, handle, ensure_ascii=False, indent=2, default=str)
+            print(f"\nHam örnekler kaydedildi: {out}")
+    print("\n✅ Turkuaz bağlantısı ve eşleştirme çalışıyor.")
+    return 0
+
+
+def cmd_check_turkuaz(args: argparse.Namespace) -> int:
+    settings = get_settings()
+    apply_network_env(settings)
+    return run_check_turkuaz(settings, out=args.out)
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -222,7 +336,9 @@ def build_parser() -> argparse.ArgumentParser:
     sub.add_parser("check-llm", help="LLM bağlantısını ve desteklenen yöntemleri test et").set_defaults(
         func=cmd_check_llm
     )
-    sub.add_parser("check-turkuaz", help="Turkuaz endpoint'ini test et").set_defaults(func=_not_yet(6))
+    turkuaz = sub.add_parser("check-turkuaz", help="Turkuaz'a bağlan, ilk kayıtları ve alan adlarını göster")
+    turkuaz.add_argument("--out", help="Ham JSON örneklerini bu dosyaya yaz (base64 içerik kısaltılır)")
+    turkuaz.set_defaults(func=cmd_check_turkuaz)
     return parser
 
 

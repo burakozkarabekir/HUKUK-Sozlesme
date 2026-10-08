@@ -87,6 +87,7 @@ class Settings(BaseSettings):
     TURKUAZ_PASSWORD: SecretStr = SecretStr("")
     TURKUAZ_TIMEOUT_SECONDS: float = 60
     TURKUAZ_VERIFY_SSL: bool = True
+    TURKUAZ_MAX_RETRIES: int = Field(default=3, ge=0, le=10)
 
     # --- OCR (optional) ---
     OCR_ENABLED: bool = False
