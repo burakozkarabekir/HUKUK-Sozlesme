@@ -16,10 +16,12 @@ from fastapi.staticfiles import StaticFiles
 from starlette.requests import Request
 
 from app import __version__
-from app.api import routes_health, routes_me
+from app.api import routes_chat, routes_health, routes_me
 from app.config import BASE_DIR, Settings, apply_network_env, get_settings
 from app.db import check_fts5, connect, migrate
 from app.errors import register_error_handlers
+from app.llm.client import LLMClient
+from app.llm.usage import make_db_usage_recorder
 from app.logging_conf import setup_logging
 from app.middleware import RequestContextMiddleware
 
@@ -54,6 +56,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             extra={"env": settings.APP_ENV, "auth_mode": settings.AUTH_MODE, "version": __version__},
         )
         yield
+        await app.state.llm.aclose()
         logger.info("app_stopped")
 
     is_prod = settings.APP_ENV == "prod"
@@ -67,12 +70,16 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         openapi_url=None if is_prod else "/openapi.json",
     )
     app.dependency_overrides[get_settings] = lambda: settings
+    # The SDK client is built lazily on first use, so a missing key only
+    # affects LLM endpoints, not startup.
+    app.state.llm = LLMClient(settings, usage_recorder=make_db_usage_recorder(settings.db_path))
 
     register_error_handlers(app)
     app.add_middleware(RequestContextMiddleware)
 
     app.include_router(routes_health.router)
     app.include_router(routes_me.router)
+    app.include_router(routes_chat.router)
 
     app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 

@@ -7,6 +7,7 @@
   <link rel="icon" href="data:,">
   <!-- All URLs are relative so the app works under /sozlesme/ behind nginx. -->
   <link rel="stylesheet" href="static/app.css">
+  <script src="static/markdown.js" defer></script>
   <script src="static/app.js" defer></script>
 </head>
 <body>
@@ -30,10 +31,23 @@
     <main class="content" id="content">
       <div class="alert alert-error hidden" id="global-error" role="alert"></div>
 
-      <section class="view" id="view-sohbet" data-title="Sohbet">
-        <h2>💬 Sözleşme Sohbeti</h2>
-        <p class="muted">Sözleşmeler hakkında doğal dilde soru sorun. Her cevap kaynak gösterir (sözleşme no, madde, sayfa).</p>
-        <div class="placeholder">Bu ekran Faz 2 ve Faz 4'te etkinleşecek.</div>
+      <section class="view view-chat" id="view-sohbet" data-title="Sohbet">
+        <div class="view-header">
+          <h2>💬 Sözleşme Sohbeti</h2>
+          <button type="button" class="btn btn-secondary" id="chat-new" title="Sohbet geçmişini temizle">＋ Yeni sohbet</button>
+        </div>
+        <div class="chat-log" id="chat-log" aria-live="polite">
+          <div class="chat-empty" id="chat-empty">
+            <p class="muted">Sözleşmeler hakkında doğal dilde soru sorun. Her cevap kaynak gösterir (sözleşme no, madde, sayfa).</p>
+            <p class="notice">ℹ️ Sözleşme arşivinde arama Faz 4'te etkinleşecek. Şu an asistan sözleşme metinlerine erişemez.</p>
+            <div class="examples" id="chat-examples"></div>
+          </div>
+        </div>
+        <form class="chat-form" id="chat-form">
+          <textarea id="chat-input" rows="2" maxlength="4000"
+            placeholder="Sorunuzu yazın… (Enter: gönder, Shift+Enter: yeni satır)" aria-label="Soru"></textarea>
+          <button type="submit" class="btn btn-primary" id="chat-send">Gönder</button>
+        </form>
       </section>
 
       <section class="view" id="view-etki" data-title="Mevzuat Etki Analizi">

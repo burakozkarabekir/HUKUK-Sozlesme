@@ -51,7 +51,21 @@ class Settings(BaseSettings):
     EMBEDDING_MODEL: str = ""
     LLM_TIMEOUT_SECONDS: float = 120
     LLM_MAX_RETRIES: int = 3
-    LLM_MAX_CONCURRENCY: int = 4
+    LLM_MAX_CONCURRENCY: int = Field(default=4, gt=0)
+    # VARSAYIM: Extra LLM knobs (not in spec). `auto` modes probe the endpoint and
+    # fall back; `cli.py check-llm` prints the recommended fixed values.
+    LLM_STRUCTURED_MODE: Literal["auto", "json_schema", "prompt"] = "auto"
+    LLM_STREAMING: Literal["auto", "on", "off"] = "auto"
+    # 0 = do not send max_output_tokens (reasoning models count thinking tokens too).
+    LLM_MAX_OUTPUT_TOKENS: int = Field(default=0, ge=0)
+    # Empty = do not send; otherwise minimal | low | medium | high (reasoning models only).
+    LLM_REASONING_EFFORT: str = ""
+
+    # --- Chat ---
+    # VARSAYIM: Chat limits (spec: "send last N messages", "limit total prompt size").
+    CHAT_HISTORY_MESSAGES: int = Field(default=10, ge=0)
+    CHAT_MAX_QUESTION_CHARS: int = Field(default=4000, gt=0)
+    CHAT_MAX_PROMPT_CHARS: int = Field(default=60_000, gt=0)
 
     # --- Contract source ---
     CONTRACT_SOURCE: Literal["local", "turkuaz", "mock"] = "local"
@@ -139,6 +153,20 @@ class Settings(BaseSettings):
     @property
     def db_path(self) -> Path:
         return self.DATA_DIR / "app.db"
+
+    @property
+    def llm_configured(self) -> bool:
+        return bool(self.AZURE_OPENAI_BASE_URL.strip() and self.AZURE_OPENAI_API_KEY.get_secret_value())
+
+    @property
+    def ca_bundle_path(self) -> str:
+        """Extra (corporate) CA file, if configured. Settings win over the environment."""
+        return (
+            self.REQUESTS_CA_BUNDLE
+            or self.SSL_CERT_FILE
+            or os.environ.get("REQUESTS_CA_BUNDLE", "")
+            or os.environ.get("SSL_CERT_FILE", "")
+        )
 
     @property
     def vector_search_enabled(self) -> bool:

@@ -6,7 +6,7 @@ Doğuş Otomotiv Hukuk birimi için yapay zeka destekli bir web uygulaması. Tur
 2. **Sözleşme sohbeti (RAG):** Sözleşmeler hakkında soru-cevap. Her cevapta kaynak gösterilir.
 3. **Keyword arama:** Tüm sözleşmelerde kelime ve ifade araması.
 
-> **Durum: Faz 1 (İskelet).** Proje yapısı, yapılandırma, loglama, veritabanı/migration, `/health` ve UI iskeleti hazır. Diğer özellikler sonraki fazlarda gelecek (aşağıdaki [Yol haritası](#yol-haritası) bölümüne bakın).
+> **Durum: Faz 2 (LLM katmanı).** İskelet + Azure AI Foundry bağlantısı, `cli.py check-llm` ve streaming sohbet (henüz sözleşme araması olmadan) hazır. Diğer özellikler sonraki fazlarda gelecek (aşağıdaki [Yol haritası](#yol-haritası) bölümüne bakın).
 
 ---
 
@@ -16,7 +16,7 @@ Doğuş Otomotiv Hukuk birimi için yapay zeka destekli bir web uygulaması. Tur
 |---|---|
 | Backend | FastAPI + Uvicorn (Python 3.12) |
 | Veritabanı | SQLite (`data/app.db`) + FTS5 |
-| LLM | Azure AI Foundry, Responses API (OpenAI Python SDK). Faz 2'de eklenecek. |
+| LLM | Azure AI Foundry, Responses API (OpenAI Python SDK `openai==3.26.0`) |
 | Frontend | Saf HTML + CSS + vanilla JS. Build adımı ve CDN yok. |
 | Yapılandırma | `pydantic-settings` + `.env` |
 
@@ -31,10 +31,17 @@ app/
   errors.py          Tutarlı hata formatı: {"error": {"code", "message"}}
   middleware.py      Request ID, güvenlik başlıkları (CSP vb.), access log
   models.py          Pydantic şemaları
-  auth/              Kimlik doğrulama (Faz 1: sadece AUTH_MODE=none)
-  api/               HTTP uçları (routes_health, routes_me, ...)
-  sources/ ingest/ llm/ services/   Sonraki fazlar
-  static/            index.html, app.css, app.js
+  net.py             Proxy / kurumsal CA için SSL context
+  auth/              Kimlik doğrulama (şimdilik sadece AUTH_MODE=none)
+  api/               HTTP uçları (routes_health, routes_me, routes_chat)
+  llm/
+    client.py        Responses API wrapper (eşzamanlılık, retry, timeout, streaming, structured output)
+    prompts.py       Tüm Türkçe promptlar + prompt injection'a karşı veri ayraçları
+    schemas.py       Structured output JSON şemaları
+    usage.py         Token kullanımı (llm_usage tablosu)
+  services/chat.py   Sohbet geçmişi kırpma (RAG Faz 4'te)
+  sources/ ingest/   Sonraki fazlar
+  static/            index.html, app.css, app.js, markdown.js
 cli.py               python cli.py migrate | stats | sync | reindex | check-llm | check-turkuaz
 tests/               pytest testleri
 deploy/              systemd, nginx, setup/update script'leri (Faz 8)
@@ -81,7 +88,24 @@ curl http://127.0.0.1:8001/health
 curl http://127.0.0.1:8001/api/me
 ```
 
-`check-llm` (Faz 2), `sync`/`reindex` (Faz 3) ve `check-turkuaz` (Faz 6) komutları ilgili fazlarda eklenecek.
+`sync`/`reindex` (Faz 3) ve `check-turkuaz` (Faz 6) komutları ilgili fazlarda eklenecek.
+
+### `python cli.py check-llm`
+
+`.env` içindeki Azure AI Foundry ayarlarıyla 4 adımlı bir kontrol yapar ve hangi yöntemlerin çalıştığını raporlar:
+
+1. Basit çağrı (Responses API): bağlantı, API key, model/deployment adı.
+2. Streaming: cevabın parça parça gelip gelmediği.
+3. Yapılandırılmış çıktı (`json_schema`, strict).
+4. Prompt ile JSON (yedek yöntem).
+
+Sonunda önerilen ayarları yazar (ör. `LLM_STREAMING=on`, `LLM_STRUCTURED_MODE=json_schema`). Bunları `.env`'ye yazarsanız uygulama her açılışta yeniden deneme yapmaz. `auto` modunda da çalışır: desteklenmeyen özellik ilk denemede tespit edilir ve süreç boyunca hatırlanır. API key ekrana maskelenmiş yazılır (sadece son 4 karakter).
+
+```bash
+curl -N -X POST http://127.0.0.1:8001/sozlesme/api/chat \
+     -H "Content-Type: application/json" \
+     -d '{"message": "Mücbir sebep nedir?"}'
+```
 
 ## Yapılandırma notları
 
@@ -90,6 +114,30 @@ curl http://127.0.0.1:8001/api/me
 - `DATA_DIR`, `LOG_DIR` ve `LOCAL_CONTRACTS_DIR` göreli verilirse proje köküne göre çözülür, çalışma dizinine göre değil.
 - `APP_ENV=prod` ve `AUTH_MODE=none` birlikte verilirse uygulama başlamaz.
 - Proxy ve kurumsal CA: `HTTPS_PROXY`, `HTTP_PROXY`, `NO_PROXY`, `REQUESTS_CA_BUNDLE`, `SSL_CERT_FILE`. Bu değerler sadece `.env` içinde verilmişse uygulama açılışta bunları ortam değişkenine aktarır. Ortamda zaten tanımlı olan değer önceliklidir.
+
+## LLM katmanı (Faz 2)
+
+- **Bağlantı:** `OpenAI(base_url=AZURE_OPENAI_BASE_URL, api_key=...)` ile Responses API. `CHAT_MODEL` Azure'daki **deployment adıdır**.
+- **Gizlilik:** Her istekte `store=false` gönderilir; prompt ve cevaplar sağlayıcı tarafında saklanmaz. Uygulama logunda prompt ve cevap metni yer almaz, sadece amaç, model, token sayıları ve süre loglanır.
+- **Retry ve timeout:** 429, 5xx ve bağlantı hatalarında SDK `LLM_MAX_RETRIES` kez artan beklemeyle yeniden dener. Her çağrı `LLM_TIMEOUT_SECONDS` ile sınırlıdır.
+- **Eşzamanlılık:** `LLM_MAX_CONCURRENCY` süreç başınadır. 2 worker ile toplam üst sınır 2 katıdır.
+- **Structured output:** Önce `json_schema` (strict) denenir. Model desteklemiyorsa JSON prompt ile istenir. Cevap Pydantic ile doğrulanır; hatalıysa 1 kez onarım isteği gönderilir.
+- **Streaming:** Sohbet cevabı SSE ile akar (`start`, `delta`, `done`, `error` olayları). Streaming desteklenmezse tek parça cevaba düşer.
+- **Token kullanımı:** Her çağrı `llm_usage` tablosuna yazılır (günlük toplam Yönetim ekranında Faz 7'de gösterilecek).
+- **Prompt injection:** Sözleşme ve mevzuat metinleri promptta `<sozlesme_metni>` / `<mevzuat_metni>` etiketleri içinde **veri** olarak verilir. Metnin içinde kapanış etiketi varsa etkisizleştirilir. Sistem promptu bu metinlerdeki talimatların uygulanmamasını ve kaynakta olmayan bilginin uydurulmamasını söyler.
+- **Hata mesajları:** Zaman aşımı, bağlantı/proxy/SSL, yanlış key, bulunamayan deployment, kota ve içerik filtresi için kullanıcıya ayrı Türkçe mesaj gösterilir. Teknik detay sadece loga yazılır.
+
+### Kurumsal proxy ve SSL
+
+`openai` SDK'sı `httpx2` kullanır. `httpx2`, `SSL_CERT_FILE` verildiğinde **sadece** o dosyaya güvenir ve sistem sertifikalarını devre dışı bırakır. Bu yüzden uygulama kendi SSL context'ini kurar: önce sistem sertifikaları, üstüne `REQUESTS_CA_BUNDLE` / `SSL_CERT_FILE` ile verilen kurum CA'sı. Proxy, `HTTPS_PROXY` / `NO_PROXY` ortam değişkenlerinden okunur.
+
+### Sohbet
+
+- Enter gönderir, Shift+Enter yeni satır açar. Cevap akarken "Gönder" butonu "Durdur"a döner.
+- Cevaplar güvenli bir markdown render'ı ile gösterilir (kalın, italik, liste, tablo, kod). Render DOM'u `textContent` ile kurar; model çıktısındaki HTML metin olarak görünür.
+- Sohbet geçmişi tarayıcı oturumunda (`sessionStorage`) tutulur ve her istekle gönderilir. Sunucu son `CHAT_HISTORY_MESSAGES` mesajı, toplam `CHAT_MAX_PROMPT_CHARS` karakteri aşmayacak şekilde kullanır. Sunucu sohbet durumu tutmadığı için 2 worker ile sorunsuz çalışır.
+- Audit kaydına sadece kullanıcı sorusu yazılır, cevap yazılmaz.
+- Faz 2'de asistan sözleşme metinlerine erişemez; belirli bir sözleşme sorulursa "Sözleşmelerde bu bilgi bulunamadı." der. Kaynaklı cevaplar Faz 4'te gelecek.
 
 ## Root path ve nginx
 
@@ -131,13 +179,18 @@ Kodda `# VARSAYIM:` ile işaretlenen yerler:
 | 5 | Varsayılan limitler: mevzuat metni 200.000 karakter, PDF 25 MB, kullanıcı başına dakikada 60 istek. | `app/config.py` |
 | 6 | `AUTH_MODE=none` (sadece dev) iken her istek yerel "Geliştirici" yönetici kullanıcısı olarak işlenir. | `app/auth/__init__.py` |
 | 7 | Access log'a kullanıcı adı Faz 7'de (auth middleware'e taşındığında) yazılacak. Şimdilik `-`. | `app/auth/__init__.py` |
+| 8 | Ek LLM ayarları: `LLM_STRUCTURED_MODE`, `LLM_STREAMING`, `LLM_MAX_OUTPUT_TOKENS`, `LLM_REASONING_EFFORT`. | `app/config.py` |
+| 9 | Sohbet limitleri: son 10 mesaj, soru en fazla 4.000, toplam prompt en fazla 60.000 karakter. | `app/config.py` |
+| 10 | LLM retry'ları için SDK'nın kendi artan beklemeli retry mekanizması kullanılır. | `app/llm/client.py` |
+| 11 | `LLM_MAX_CONCURRENCY` süreç başınadır (2 worker = en fazla 2 katı eşzamanlı çağrı). | `app/llm/client.py` |
+| 12 | Sohbet geçmişi tarayıcı oturumunda tutulur ve her istekle gönderilir; sunucuda saklanmaz. | `app/models.py` |
 
 Spesifikasyona eklenen küçük uçlar: `GET /api/me` (üst bardaki kullanıcı adı ve Yönetim menüsünün görünürlüğü için).
 
 ## Yol haritası
 
 - [x] **Faz 1 – İskelet**
-- [ ] Faz 2 – LLM katmanı (`llm/client.py`, `check-llm`, streaming sohbet)
+- [x] **Faz 2 – LLM katmanı** (`llm/client.py`, `check-llm`, streaming sohbet)
 - [ ] Faz 3 – Kaynak + ingestion (local/mock kaynak, PDF çıkarma, chunker, FTS5, `sync`, Sözleşmeler ekranı)
 - [ ] Faz 4 – Hibrit arama + RAG sohbet (kaynak paneli, PDF görüntüleme)
 - [ ] Faz 5 – Mevzuat etki analizi (arka plan işi, alıntı doğrulama, Excel, geçmiş)
