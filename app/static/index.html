@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="tr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Sözleşme Mevzuat Etki Analizi</title>
+  <link rel="icon" href="data:,">
+  <!-- All URLs are relative so the app works under /sozlesme/ behind nginx. -->
+  <link rel="stylesheet" href="static/app.css">
+  <script src="static/app.js" defer></script>
+</head>
+<body>
+  <header class="topbar">
+    <button type="button" class="menu-toggle" id="menu-toggle" aria-label="Menüyü aç/kapat" aria-expanded="false">☰</button>
+    <h1 class="app-title" id="app-title">Sözleşme Mevzuat Etki Analizi</h1>
+    <span class="env-badge hidden" id="env-badge"></span>
+    <span class="spacer"></span>
+    <span class="user-name" id="user-name" title="Giriş yapan kullanıcı"></span>
+  </header>
+
+  <div class="layout">
+    <nav class="sidebar" id="sidebar" aria-label="Ana menü">
+      <a href="#sohbet" data-view="sohbet" class="nav-link"><span aria-hidden="true">💬</span> Sohbet</a>
+      <a href="#etki" data-view="etki" class="nav-link"><span aria-hidden="true">⚖️</span> Mevzuat Etki Analizi</a>
+      <a href="#arama" data-view="arama" class="nav-link"><span aria-hidden="true">🔎</span> Keyword Arama</a>
+      <a href="#sozlesmeler" data-view="sozlesmeler" class="nav-link"><span aria-hidden="true">📄</span> Sözleşmeler</a>
+      <a href="#yonetim" data-view="yonetim" class="nav-link hidden" id="nav-admin"><span aria-hidden="true">⚙️</span> Yönetim</a>
+    </nav>
+
+    <main class="content" id="content">
+      <div class="alert alert-error hidden" id="global-error" role="alert"></div>
+
+      <section class="view" id="view-sohbet" data-title="Sohbet">
+        <h2>💬 Sözleşme Sohbeti</h2>
+        <p class="muted">Sözleşmeler hakkında doğal dilde soru sorun. Her cevap kaynak gösterir (sözleşme no, madde, sayfa).</p>
+        <div class="placeholder">Bu ekran Faz 2 ve Faz 4'te etkinleşecek.</div>
+      </section>
+
+      <section class="view" id="view-etki" data-title="Mevzuat Etki Analizi">
+        <h2>⚖️ Mevzuat Etki Analizi</h2>
+        <p class="muted">Mevzuat değişikliği metnini yapıştırın veya PDF yükleyin; etkilenen sözleşme ve maddeleri gerekçesiyle listeleyin.</p>
+        <div class="placeholder">Bu ekran Faz 5'te etkinleşecek.</div>
+      </section>
+
+      <section class="view" id="view-arama" data-title="Keyword Arama">
+        <h2>🔎 Keyword Arama</h2>
+        <p class="muted">Bir veya birden fazla kelimeyle tüm sözleşmelerde geçen maddeleri bulun.</p>
+        <div class="placeholder">Bu ekran Faz 4'te etkinleşecek.</div>
+      </section>
+
+      <section class="view" id="view-sozlesmeler" data-title="Sözleşmeler">
+        <h2>📄 Sözleşmeler</h2>
+        <p class="muted">Senkronize edilen sözleşmeleri arayın, maddelerini ve OCR durumunu görüntüleyin.</p>
+        <div class="placeholder">Bu ekran Faz 3'te etkinleşecek.</div>
+      </section>
+
+      <section class="view" id="view-yonetim" data-title="Yönetim">
+        <h2>⚙️ Yönetim</h2>
+        <p class="muted">Senkronizasyon durumu, OCR bekleyen sözleşmeler, token kullanımı ve bağımlılık sağlığı.</p>
+        <div class="card">
+          <h3>Uygulama Durumu</h3>
+          <dl class="kv" id="health-info"><dt>Durum</dt><dd>Yükleniyor…</dd></dl>
+        </div>
+        <div class="placeholder">Diğer yönetim işlevleri Faz 3 ve Faz 7'de etkinleşecek.</div>
+      </section>
+    </main>
+  </div>
+
+  <footer class="disclaimer" role="note">
+    Bu çıktılar yapay zeka tarafından üretilmiştir ve hukuki görüş niteliği taşımaz.
+    Nihai değerlendirme Hukuk birimine aittir.
+  </footer>
+</body>
+</html>

@@ -1,0 +1,9 @@
+# Runtime dependencies (pinned). Later phases add: openai, pypdf, pdfplumber,
+# openpyxl, numpy, bcrypt, msal.
+fastapi==0.142.4
+starlette==1.7.0
+uvicorn==0.54.0
+pydantic==2.13.5
+pydantic-settings==2.15.0
+python-dotenv==1.2.4
+httpx==0.28.1

@@ -1,0 +1,27 @@
+# Secrets & runtime data
+.env
+data/
+logs/
+*.db
+*.db-wal
+*.db-shm
+
+# Python
+venv/
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Editors / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Contract PDFs must never be committed
+sample_contracts/*
+!sample_contracts/.gitkeep
