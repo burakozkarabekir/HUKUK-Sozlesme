@@ -201,6 +201,16 @@ MIGRATIONS: list[tuple[int, str, str]] = [
         CREATE INDEX ix_jobs_status ON analysis_jobs(status, created_at);
         """,
     ),
+    (
+        4,
+        "never reuse chunk ids",
+        """
+        -- Stored analysis results reference chunk ids; a re-synced file must get new ids
+        -- instead of reusing the deleted ones (rowid would reuse max(id)+1).
+        CREATE TABLE app_counters (name TEXT PRIMARY KEY, value INTEGER NOT NULL);
+        INSERT INTO app_counters (name, value) SELECT 'chunk_id', COALESCE(MAX(id), 0) FROM chunks;
+        """,
+    ),
 ]
 
 

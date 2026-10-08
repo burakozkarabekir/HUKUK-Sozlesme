@@ -14,9 +14,10 @@ import re
 import sqlite3
 import uuid
 from dataclasses import dataclass
+from datetime import date
 from typing import Any
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 from app.config import Settings
 from app.db import connect, utcnow_iso
@@ -45,9 +46,14 @@ MAX_KEYWORDS = 60
 class ImpactFilters(BaseModel):
     contract_type: str | None = None
     party: str | None = None
-    date_from: str | None = None
-    date_to: str | None = None
+    date_from: date | None = None
+    date_to: date | None = None
     active_only: bool = False
+
+    @field_validator("date_from", "date_to", mode="before")
+    @classmethod
+    def _empty_date(cls, value: Any) -> Any:
+        return None if value == "" else value
 
     def to_contract_filters(self) -> ContractFilters:
         return ContractFilters(
@@ -517,10 +523,13 @@ async def run_job(job_id: str, llm: LLMClient, settings: Settings) -> str:
                     return
                 try:
                     result = await evaluate_contract(llm, settings, ctx, contract, chunks)
-                except AppError as exc:
-                    if exc.code in FATAL_LLM_CODES:
+                except Exception as exc:
+                    if isinstance(exc, AppError) and exc.code in FATAL_LLM_CODES:
                         fatal.append(exc)
                         return
+                    if not isinstance(exc, AppError):
+                        logger.exception("impact_contract_failed", extra={"job_id": job_id, "contract_id": contract_id})
+                    message = exc.message if isinstance(exc, AppError) else "Değerlendirme sırasında beklenmeyen hata."
                     _store_result(
                         conn,
                         job_id,
@@ -530,7 +539,7 @@ async def run_job(job_id: str, llm: LLMClient, settings: Settings) -> str:
                             "affected_clauses": [],
                             "candidate_count": len(chunks),
                         },
-                        exc.message,
+                        message,
                     )
                     return
                 _store_result(conn, job_id, result)
@@ -549,10 +558,12 @@ async def run_job(job_id: str, llm: LLMClient, settings: Settings) -> str:
                 for task in done:
                     if task.exception():
                         raise task.exception()  # type: ignore[misc]
-        except asyncio.CancelledError:
+        finally:
+            # Whatever happens (DB error, shutdown), no evaluation may keep running and
+            # spending tokens after this function returns and closes the connection.
             for task in tasks:
                 task.cancel()
-            raise
+            await asyncio.gather(*tasks, return_exceptions=True)
 
         if fatal:
             _finish(conn, job_id, "failed", fatal[0].message)

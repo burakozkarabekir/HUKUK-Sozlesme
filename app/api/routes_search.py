@@ -23,7 +23,7 @@ def search(
     request: Request,
     q: str = Query(..., min_length=1, max_length=300),
     mode: Literal["and", "or"] = "and",
-    page: int = Query(1, ge=1),
+    page: int = Query(1, ge=1, le=100_000),
     page_size: int = Query(20, ge=1, le=100),
     filters: ContractFilters = Depends(contract_filters),
     user: CurrentUser = Depends(get_current_user),

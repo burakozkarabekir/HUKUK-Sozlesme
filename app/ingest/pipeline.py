@@ -206,11 +206,15 @@ def replace_file_chunks(
             ),
         )
         ids = []
+        row = conn.execute("SELECT value FROM app_counters WHERE name = 'chunk_id'").fetchone()
+        current_max = conn.execute("SELECT COALESCE(MAX(id), 0) FROM chunks").fetchone()[0]
+        next_id = max(row[0] if row else 0, current_max) + 1
         for chunk in outcome.chunks:
             cursor = conn.execute(
-                "INSERT INTO chunks (contract_id, file_id, is_attachment, ordinal, clause_ref, clause_title,"
-                " page_start, page_end, text, text_norm) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                "INSERT INTO chunks (id, contract_id, file_id, is_attachment, ordinal, clause_ref, clause_title,"
+                " page_start, page_end, text, text_norm) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 (
+                    next_id,
                     contract_id,
                     file.file_id,
                     int(file.is_attachment),
@@ -224,6 +228,12 @@ def replace_file_chunks(
                 ),
             )
             ids.append(int(cursor.lastrowid))
+            next_id += 1
+        conn.execute(
+            "INSERT INTO app_counters (name, value) VALUES ('chunk_id', ?)"
+            " ON CONFLICT(name) DO UPDATE SET value = MAX(value, excluded.value)",
+            (next_id - 1,),
+        )
     return ids
 
 
@@ -302,6 +312,46 @@ def _user_message(exc: Exception) -> str:
     return exc.message if isinstance(exc, AppError) else f"Beklenmeyen hata ({type(exc).__name__})"
 
 
+# VARSAYIM: A full sync never deletes more than half of the archive in one run; a
+# larger drop is far more likely an API/mapping problem than real deletions.
+FULL_SYNC_MAX_DELETE_RATIO = 0.5
+
+
+def _delete_missing(conn: sqlite3.Connection, listed: set[str], stats: SyncStats) -> int:
+    existing = [row["contract_id"] for row in conn.execute("SELECT contract_id FROM contracts")]
+    stale = [contract_id for contract_id in existing if contract_id not in listed]
+    if not stale:
+        return 0
+    if stats.errors:
+        stats.errors.append({"contract_id": "", "message": "Liste eksik/hatalı alındığı için silme işlemi yapılmadı."})
+        return 0
+    if len(stale) > len(existing) * FULL_SYNC_MAX_DELETE_RATIO:
+        stats.errors.append(
+            {
+                "contract_id": "",
+                "message": f"Kaynakta {len(stale)}/{len(existing)} sözleşme görünmüyor; güvenlik nedeniyle "
+                "silme yapılmadı. Kaynak yanıtını ve eşleştirmeyi kontrol edin (cli.py check-turkuaz).",
+            }
+        )
+        return 0
+    for contract_id in stale:
+        conn.execute("DELETE FROM contracts WHERE contract_id = ?", (contract_id,))
+    return len(stale)
+
+
+def _embed_missing_safely(conn: sqlite3.Connection, settings: Settings, embedder: Embedder) -> list[dict[str, str]]:
+    """Fill vectors that failed earlier (the file hash is already stored, so the file
+    itself will not be processed again)."""
+    from app.services.embeddings import embed_missing
+
+    try:
+        embed_missing(conn, settings, embedder)
+    except Exception as exc:
+        logger.warning("sync_embed_missing_failed", exc_info=True)
+        return [{"contract_id": "", "message": f"Embedding üretilemedi: {_user_message(exc)}"}]
+    return []
+
+
 def build_ocr(settings: Settings) -> object | None:
     if not settings.OCR_ENABLED:
         return None
@@ -358,15 +408,14 @@ def run_sync(
                 stats.errors.append({"contract_id": meta.contract_id, "message": _user_message(exc)})
                 continue
             setattr(stats, outcome, getattr(stats, outcome) + 1)
+        # A listing the source itself flags as incomplete (page limit, unmapped records)
+        # must not advance the watermark nor drive deletions.
+        for warning in getattr(source, "listing_warnings", []) or []:
+            stats.errors.append({"contract_id": "", "message": warning})
+        if embedder is not None:
+            stats.errors.extend(_embed_missing_safely(conn, settings, embedder))
         if full:
-            stale = [
-                row["contract_id"]
-                for row in conn.execute("SELECT contract_id FROM contracts")
-                if row["contract_id"] not in listed
-            ]
-            for contract_id in stale:
-                conn.execute("DELETE FROM contracts WHERE contract_id = ?", (contract_id,))
-            stats.deleted = len(stale)
+            stats.deleted = _delete_missing(conn, listed, stats)
         stats.status = "partial" if stats.errors else "success"
     except Exception as exc:
         logger.exception("sync_failed")

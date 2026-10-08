@@ -29,6 +29,7 @@ logger = logging.getLogger(__name__)
 
 TOKEN_SKEW_SECONDS = 60
 MAX_RETRY_AFTER_SECONDS = 60
+MAX_REDIRECTS = 5
 
 
 # ---------------------------------------------------------------------------
@@ -177,14 +178,43 @@ class TurkuazSource(ContractSource):
             verify=verify,
             trust_env=True,  # HTTPS_PROXY / NO_PROXY
             headers={"Accept": "application/json", "User-Agent": "sozlesme-etki-analizi/1.0"},
-            follow_redirects=True,
+            # Redirects are followed manually so credentials never leave the Turkuaz origin.
+            follow_redirects=False,
         )
         self.auth = build_auth(settings, self.client)
+        self._origin = self._origin_of(httpx.URL(settings.TURKUAZ_BASE_URL))
+        # Reasons why the last listing may be incomplete (pipeline then skips deletions).
+        self.listing_warnings: list[str] = []
 
     def close(self) -> None:
         self.client.close()
 
     # --- HTTP with retries ---
+    @staticmethod
+    def _origin_of(url: httpx.URL) -> tuple[str, str, int | None]:
+        default = {"http": 80, "https": 443}.get(url.scheme)
+        return url.scheme, url.host, url.port or default
+
+    def _trusted(self, url: str) -> bool:
+        """Auth headers are only sent to the configured Turkuaz origin (no credential leak via
+        download links, pagination links or redirects pointing elsewhere)."""
+        parsed = httpx.URL(url)
+        return not parsed.is_absolute_url or self._origin_of(parsed) == self._origin
+
+    def _send(self, method: str, url: str, params: dict[str, Any] | None) -> httpx.Response:
+        target = url
+        for _ in range(MAX_REDIRECTS + 1):
+            headers = self.auth.headers() if self._trusted(target) else {}
+            response = self.client.request(method, target, params=params, headers=headers)
+            location = response.headers.get("location")
+            if not (response.is_redirect and location):
+                return response
+            target = str(response.url.join(location))
+            params = None
+            if response.status_code in (301, 302, 303):
+                method = "GET"
+        raise SourceError("turkuaz_too_many_redirects", "Turkuaz çok fazla yönlendirme yaptı.")
+
     def _backoff(self, attempt: int, response: httpx.Response | None = None) -> None:
         delay = float(min(2**attempt, 30))
         if response is not None:
@@ -199,7 +229,7 @@ class TurkuazSource(ContractSource):
         attempt = 0
         while True:
             try:
-                response = self.client.request(method, url, params=params, headers=self.auth.headers())
+                response = self._send(method, url, params)
             except httpx.TimeoutException as exc:
                 if attempt < retries:
                     attempt += 1
@@ -264,6 +294,17 @@ class TurkuazSource(ContractSource):
     # --- pagination ---
     @staticmethod
     def _items(body: Any, path: str) -> list[Any]:
+        if path:
+            parent_path, _, key = path.rpartition(".")
+            parent = mapping.get_path(body, parent_path) if parent_path else body
+            if not isinstance(parent, dict) or key not in parent:
+                # A missing key is NOT "no records": e.g. {"error": "maintenance"} must not
+                # look like an empty archive (a full sync would delete everything).
+                raise SourceError(
+                    "turkuaz_unexpected_format",
+                    f"Turkuaz yanıtında '{path}' alanı yok. Yanıt beklenen biçimde değil "
+                    "(bakım/hata yanıtı olabilir) veya turkuaz_mapping.py ayarları güncellenmeli.",
+                )
         items = mapping.get_path(body, path) if path else body
         if items is None:
             return []
@@ -317,6 +358,7 @@ class TurkuazSource(ContractSource):
                 if not url:
                     return
         logger.warning("turkuaz_max_pages_reached", extra={"max_pages": cfg["max_pages"]})
+        self.listing_warnings.append(f"Sayfa sınırına ({cfg['max_pages']}) ulaşıldı; liste eksik olabilir.")
 
     # --- ContractSource ---
     def list_contracts(self, updated_since: datetime | None = None) -> list[ContractMeta]:
@@ -324,17 +366,22 @@ class TurkuazSource(ContractSource):
         if updated_since and mapping.UPDATED_SINCE_PARAM:
             params[mapping.UPDATED_SINCE_PARAM] = updated_since.astimezone(UTC).strftime(mapping.UPDATED_SINCE_FORMAT)
         result: list[ContractMeta] = []
+        self.listing_warnings = []
+        skipped = 0
         for _, items in self.iter_pages(mapping.LIST_PATH, params):
             for raw in items:
                 try:
                     meta = mapping.map_contract(raw)
                 except ValueError as exc:
                     logger.warning("turkuaz_record_skipped", extra={"error": str(exc)[:300]})
+                    skipped += 1
                     continue
                 # Client-side guard in case the API ignores the updated-since parameter.
                 if updated_since and meta.updated_at and meta.updated_at <= updated_since:
                     continue
                 result.append(meta)
+        if skipped:
+            self.listing_warnings.append(f"{skipped} kayıt eşleştirilemediği için atlandı (turkuaz_mapping.py).")
         return result
 
     def get_contract_document(self, contract_id: str) -> list[ContractFile]:

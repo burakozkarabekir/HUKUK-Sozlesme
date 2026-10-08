@@ -5,8 +5,10 @@ from __future__ import annotations
 import sqlite3
 from datetime import date
 from pathlib import Path
+from typing import Annotated
 
 from fastapi import APIRouter, Depends, Query, Request
+from fastapi import Path as PathParam
 from fastapi.responses import FileResponse
 
 from app.api.deps import audit, get_db
@@ -42,7 +44,7 @@ def contract_filters(
 @router.get("/contracts")
 def contracts(
     filters: ContractFilters = Depends(contract_filters),
-    page: int = Query(1, ge=1),
+    page: int = Query(1, ge=1, le=100_000),
     page_size: int = Query(25, ge=1, le=500),
     user: CurrentUser = Depends(get_current_user),
     conn: sqlite3.Connection = Depends(get_db),
@@ -111,14 +113,14 @@ def contract_file(
 
 @router.get("/chunks/{chunk_id}")
 def chunk_detail(
-    chunk_id: int,
+    chunk_id: Annotated[int, PathParam(ge=1, le=2**63 - 1)],
     request: Request,
     user: CurrentUser = Depends(get_current_user),
     conn: sqlite3.Connection = Depends(get_db),
 ) -> dict:
     chunk = get_chunk(conn, chunk_id)
     if chunk is None:
-        raise AppError("chunk_not_found", "Madde bulunamadı.", 404)
+        raise AppError("chunk_not_found", "Madde bulunamadı (sözleşme sonradan güncellenmiş olabilir).", 404)
     audit(
         conn,
         request,

@@ -121,7 +121,7 @@ async def run(
         "impact.run",
         target_type="analysis",
         target_ids=[job_id],
-        details={"keywords": len(body.keywords), "filters": body.filters.model_dump()},
+        details={"keywords": len(body.keywords), "filters": body.filters.model_dump(mode="json")},
     )
     runner = getattr(request.app.state, "job_runner", None)
     if runner is not None:

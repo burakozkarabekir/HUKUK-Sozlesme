@@ -8,6 +8,7 @@ the `get_current_user` / `require_admin` dependencies.
 
 from __future__ import annotations
 
+import asyncio
 import json
 import threading
 import time
@@ -120,7 +121,11 @@ class AuthMiddleware:
                 send, 429, "too_many_failed_logins", "Çok fazla hatalı giriş denemesi. 5 dakika sonra tekrar deneyin."
             )
             return
-        user = self.resolve(headers, ip)
+        if self.basic is not None:
+            # bcrypt takes ~0.2 s: never block the event loop (and every SSE stream) with it.
+            user = await asyncio.to_thread(self.resolve, headers, ip)
+        else:
+            user = self.resolve(headers, ip)
         state["user"] = user
         if user is not None:
             user_var.set(user.username)

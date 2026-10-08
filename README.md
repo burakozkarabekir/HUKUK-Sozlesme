@@ -256,6 +256,12 @@ Turkuaz'a özgü her şey **`app/sources/turkuaz_mapping.py`** dosyasındadır. 
 4. `check-turkuaz` komutunu "✅ Turkuaz bağlantısı ve eşleştirme çalışıyor" çıkana kadar tekrarlayın. Ardından `python cli.py sync --full` çalıştırın.
 5. Testleri güncelleyin: `tests/test_turkuaz.py` içindeki `record()` örneğini gerçek formata göre düzenleyip `pytest` çalıştırın.
 
+**Güvenlik önlemleri:**
+- Liste yanıtında `items_path` alanı yoksa (ör. bakım veya hata yanıtı) senkronizasyon hata verir; boş arşiv sayılmaz.
+- Liste eksikse (sayfa sınırına ulaşıldı veya eşleştirilemeyen kayıt var) çalıştırma "kısmen başarılı" sayılır; incremental filtre ilerlemez ve hiçbir şey silinmez.
+- Tam senkronizasyon tek seferde arşivin yarısından fazlasını silmez.
+- Kimlik bilgileri (API key, token) yalnızca `TURKUAZ_BASE_URL` ile aynı adrese gönderilir. Başka host'a işaret eden indirme linkleri ve yönlendirmeler kimlik bilgisi olmadan çağrılır.
+
 Tarih alanları ISO (`2024-01-31`, `2024-01-31T10:00:00Z`) ve Türkçe biçimleri (`31.01.2024`, `31/01/2024`) kabul eder. Hata durumlarında anlamlı Türkçe mesaj verilir: 401 (kimlik), 403 (yetki), 404 (yol), 429 (Retry-After'a uyarak tekrar), 5xx ve zaman aşımı (artan beklemeyle tekrar), bağlantı/proxy/SSL hatası.
 
 ---
@@ -379,7 +385,7 @@ Kodda `# VARSAYIM:` ile işaretli yerler:
 | Ek dosyalar | Yerel kaynakta adı "Ek-1", "EK2", "Annex" ile başlayan dosyalar ek sayılır | `sources/local_source.py` |
 | Taranmış PDF | Sayfaların yarısından fazlasında `OCR_MIN_CHARS_PER_PAGE` (40) karakterden az metin varsa | `ingest/pdf_extract.py` |
 | Madde bölme | İlk başlıktan önceki metin "Giriş" bölümüdür; sayfa üst/alt bilgileri temizlenmez | `ingest/chunker.py` |
-| Senkronizasyon | Incremental filtre yalnızca tam başarılı çalıştırmadan sonra ilerler; silme yalnızca `--full` ile yapılır | `ingest/pipeline.py` |
+| Senkronizasyon | Incremental filtre yalnızca tam başarılı çalıştırmadan sonra ilerler; silme yalnızca `--full` ile ve tek seferde arşivin en fazla %50'si için yapılır | `ingest/pipeline.py` |
 | Arama | 3+ harfli kelimeler önek olarak eşleşir; kök ünlü değişimleri (fesih→feshi) için LLM varyant önerir | `services/search.py` |
 | Yürürlükte | Bitiş tarihi boş veya bugünden sonra **ve** durum kapalı değil ("Sona Erdi", "Feshedildi", "İptal" ...) | `services/contracts.py` |
 | Alıntı doğrulama | Kelimeler (harf, Türkçe karakter ve noktalama duyarsız) aynı maddede aynı sırada geçmeli; "..." atlamaya izin verir | `services/impact.py` |
